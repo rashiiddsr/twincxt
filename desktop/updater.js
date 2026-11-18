@@ -64,7 +64,8 @@ function pickAsset(rel) {
     return find(process.arch === 'arm64' ? /-mac-arm64\.zip$/i : /-mac-x64\.zip$/i);
   }
   if (process.platform === 'linux') {
-    return process.env.APPIMAGE ? find(/-linux-x64\.AppImage$/i) : find(/-linux-x64\.deb$/i);
+    // electron-builder names them …-linux-x86_64.AppImage and …-linux-amd64.deb.
+    return process.env.APPIMAGE ? find(/-linux-(x86_64|x64)\.AppImage$/i) : find(/-linux-(amd64|x64)\.deb$/i);
   }
   return null;
 }

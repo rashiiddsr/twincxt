@@ -33,8 +33,8 @@ Download from [Releases](https://github.com/rashiiddsr/twincxt/releases/latest).
 | Windows 10/11 | `Twincxt-Setup-<version>.exe` | Installs per user by default (no admin prompt). Running it over an installed Twincxt offers Update / Repair / Uninstall. |
 | macOS (Apple Silicon) | `Twincxt-<version>-mac-arm64.dmg` | Drag Twincxt to Applications. |
 | macOS (Intel) | `Twincxt-<version>-mac-x64.dmg` | Drag Twincxt to Applications. |
-| Ubuntu, Debian, Mint | `Twincxt-<version>-linux-x64.deb` | Recommended on these systems: `sudo apt install ./Twincxt-<version>-linux-x64.deb` |
-| Other Linux | `Twincxt-<version>-linux-x64.AppImage` | `chmod +x` it and run. Needs FUSE 2 (`libfuse2`). |
+| Ubuntu, Debian, Mint | `Twincxt-<version>-linux-amd64.deb` | Recommended on these systems: `sudo apt install ./Twincxt-<version>-linux-amd64.deb` |
+| Other Linux | `Twincxt-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. Needs FUSE 2 (`libfuse2`). |
 
 **macOS, first start.** Twincxt is not signed with an Apple Developer ID, so
 macOS asks once: open it from Applications, then go to
