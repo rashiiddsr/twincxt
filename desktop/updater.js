@@ -2,11 +2,11 @@
 // updater.go).
 //
 //   1. Check: the newest GitHub release is read 20 s after start, every 6 hours
-//      and when "Periksa pembaruan" is pressed.
+//      and when "Check for updates" is pressed.
 //   2. Download: with automatic checks on, a newer version downloads in the
 //      background. Its SHA-256 must match the checksum GitHub lists for the
 //      file (or a SHA256SUMS*.txt in the release), otherwise it is deleted.
-//   3. Install, only when you press "Mulai ulang & perbarui":
+//   3. Install, only when you press "Restart to update":
 //      - macOS: the new Twincxt.app replaces the running one in place (no .dmg
 //        to drag), then opens again. Files downloaded by Twincxt itself carry
 //        no quarantine flag, so macOS does not block the new version.
@@ -82,7 +82,7 @@ async function expectedSha256(rel, asset) {
       if (f.length === 2 && f[1].replace(/^\*/, '') === asset.name && /^[0-9a-f]{64}$/i.test(f[0])) return f[0].toLowerCase();
     }
   }
-  throw new Error('checksum tidak tersedia, file tidak dipasang');
+  throw new Error('no checksum published for this file');
 }
 
 function fileSha256(file) {
@@ -139,7 +139,7 @@ class Updater {
       if (required || (!manual && cfg.autoUpdate)) this.download(false);
     } catch (e) {
       this.log('update: check failed: ' + e.message);
-      if (manual) this.set({ status: 'error', error: 'Tidak bisa memeriksa pembaruan. Periksa koneksi internet lalu coba lagi.' }, true);
+      if (manual) this.set({ status: 'error', error: "Can't check for updates. Check your connection and try again." }, true);
     } finally {
       this.busy = false;
     }
@@ -175,7 +175,7 @@ class Updater {
         await new Promise((r, j) => out.end((e) => (e ? j(e) : r())));
         if (h.digest('hex') !== want) {
           fs.rmSync(partial, { force: true });
-          throw new Error('file rusak atau tidak cocok dengan checksum rilis');
+          throw new Error("file doesn't match the release checksum");
         }
         fs.renameSync(partial, final);
       }
@@ -184,11 +184,11 @@ class Updater {
       if (thenInstall) return this.install();
       if (this.announced !== version) {
         this.announced = version;
-        this.notify('Pembaruan Twincxt ' + version + ' siap', 'Buka Pengaturan untuk memasangnya.');
+        this.notify('Twincxt ' + version + ' is ready', 'Open Settings to install it.');
       }
     } catch (e) {
       this.log('update: download failed: ' + e.message);
-      this.set({ ...base, status: 'error', error: 'Unduhan pembaruan gagal: ' + e.message }, true);
+      this.set({ ...base, status: 'error', error: 'Download failed: ' + e.message }, true);
     }
   }
 
@@ -210,21 +210,21 @@ class Updater {
   // Replace the running Twincxt.app in place, after Twincxt has quit.
   async installMac() {
     const bundle = path.resolve(process.execPath, '..', '..', '..'); // …/Twincxt.app
-    if (!bundle.endsWith('.app')) throw new Error('Twincxt tidak berjalan dari sebuah .app.');
+    if (!bundle.endsWith('.app')) throw new Error('Twincxt is not running from an .app bundle.');
     try {
       fs.accessSync(path.dirname(bundle), fs.constants.W_OK);
     } catch (_) {
-      throw new Error('Folder ' + path.dirname(bundle) + ' tidak bisa ditulis. Pasang versi baru dari file .dmg di halaman rilis.');
+      throw new Error("Can't write to " + path.dirname(bundle) + '. Install the new version from the .dmg on the releases page.');
     }
     const stage = path.join(this.dir, 'stage');
     fs.rmSync(stage, { recursive: true, force: true });
     fs.mkdirSync(stage, { recursive: true });
     await new Promise((resolve, reject) => {
       const p = spawn('/usr/bin/ditto', ['-x', '-k', this.file, stage]);
-      p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('Gagal membuka arsip pembaruan.'))));
+      p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error("Couldn't unpack the update."))));
     });
     const fresh = fs.readdirSync(stage).find((n) => n.endsWith('.app'));
-    if (!fresh) throw new Error('Arsip pembaruan tidak berisi aplikasi.');
+    if (!fresh) throw new Error('The update contains no app.');
     const script = path.join(this.dir, 'install.sh');
     fs.writeFileSync(script, [
       '#!/bin/bash',

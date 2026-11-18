@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -452,7 +452,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 <div class="app" id="app" data-active="wa">
   <div class="top-resize" id="topResize" aria-hidden="true"></div>
 
-  <nav class="side" aria-label="Layanan">
+  <nav class="side" aria-label="Services">
     <div class="mark drag-area" title="Twincxt">
       <svg viewBox="0 0 20 20" aria-hidden="true">
         <path fill="var(--wa)" d="M4.4 1.6h7.4a3 3 0 0 1 0 6H5.9l-3 1.9.6-2.1a3 3 0 0 1 .9-5.8Z"/>
@@ -482,14 +482,14 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   <header class="strip drag-area" id="strip">
     <div class="drag"><span class="app-name">Twincxt</span><span class="ctx" id="stripCtx"></span></div>
     <div class="zoom no-drag" aria-label="Zoom">
-      <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
-      <button class="val" data-zoom="0" title="Kembali ke 100%" id="zoomVal">100%</button>
-      <button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button data-zoom="-1" title="Zoom out"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+      <button class="val" data-zoom="0" title="Reset zoom" id="zoomVal">100%</button>
+      <button data-zoom="1" title="Zoom in"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
     </div>
     <div class="win no-drag">
       <button data-win="min" title="Minimize">&#xE921;</button>
       <button data-win="max" title="Maximize" id="maxBtn">&#xE922;</button>
-      <button data-win="close" class="close" title="Tutup">&#xE8BB;</button>
+      <button data-win="close" class="close" title="Close">&#xE8BB;</button>
     </div>
   </header>
 
@@ -499,76 +499,73 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 
     <section class="view settings" id="settingsView" hidden>
       <div class="settings-inner">
-        <h1>Pengaturan</h1>
+        <h1>Settings</h1>
         <div class="notice" id="updRequired" hidden>
           <div style="flex:1">
-            <b>Versi ini sudah tidak didukung</b>
-            <span id="updRequiredText">Perbarui Twincxt untuk kembali memakai WhatsApp dan Telegram.</span>
+            <b>Update required</b>
+            <span id="updRequiredText"></span>
           </div>
-          <button class="btn primary" data-update="install">Perbarui sekarang</button>
+          <button class="btn primary" data-update="install">Update</button>
         </div>
 
-        <div class="group-title">Tampilan</div>
+        <div class="group-title">Appearance</div>
         <div class="cards">
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-theme"/></svg></span>
-            <div class="card-text"><div class="card-title">Tema</div></div>
+            <div class="card-text"><div class="card-title">Theme</div></div>
             <div class="combo" data-choice="theme">
-              <button data-value="light">Terang</button>
-              <button data-value="dark">Gelap</button>
-              <button data-value="system">Sistem</button>
+              <button data-value="light">Light</button>
+              <button data-value="dark">Dark</button>
+              <button data-value="system">System</button>
             </div>
           </div>
           <div class="card">
             <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
-            <div class="card-text"><div class="card-title">Zoom WhatsApp</div></div>
+            <div class="card-text"><div class="card-title">WhatsApp zoom</div></div>
             <div class="stepper" data-zoom-for="wa">
-              <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+              <button data-zoom="-1" title="Zoom out"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Zoom in"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
             </div>
           </div>
           <div class="card">
             <svg class="svc-ico" style="color:var(--tg)" aria-hidden="true"><use href="#ico-tg"/></svg>
-            <div class="card-text"><div class="card-title">Zoom Telegram</div></div>
+            <div class="card-text"><div class="card-title">Telegram zoom</div></div>
             <div class="stepper" data-zoom-for="tg">
-              <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+              <button data-zoom="-1" title="Zoom out"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Zoom in"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
             </div>
           </div>
         </div>
 
-        <div class="group-title">Startup dan jendela</div>
+        <div class="group-title">General</div>
         <div class="cards">
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-power"/></svg></span>
-            <div class="card-text"><div class="card-title" data-text="autostart">Buka saat Windows menyala</div></div>
+            <div class="card-text"><div class="card-title" data-text="autostart">Start with Windows</div></div>
             <button class="toggle" role="switch" data-setting="autostart"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-hide"/></svg></span>
-            <div class="card-text"><div class="card-title" data-text="startHidden">Mulai tersembunyi di tray</div></div>
+            <div class="card-text"><div class="card-title" data-text="startHidden">Start minimized</div></div>
             <button class="toggle" role="switch" data-setting="startHidden"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-close"/></svg></span>
-            <div class="card-text"><div class="card-title">Saat jendela ditutup</div></div>
+            <div class="card-text"><div class="card-title">When closed</div></div>
             <div class="combo" data-choice="closeAction">
-              <button data-value="tray" data-text="keepRunning">Tetap di tray</button>
-              <button data-value="quit">Keluar</button>
+              <button data-value="tray" data-text="keepRunning">Keep in tray</button>
+              <button data-value="quit">Quit</button>
             </div>
           </div>
         </div>
 
-        <div class="group-title">Notifikasi</div>
+        <div class="group-title">Notifications</div>
         <div class="cards">
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-bell"/></svg></span>
-            <div class="card-text">
-              <div class="card-title">Cara memberi tahu pesan baru</div>
-              <div class="card-sub" data-text="notifyModeSub"></div>
-            </div>
+            <div class="card-text"><div class="card-title">Alert style</div></div>
             <div class="combo" data-choice="notifyMode">
-              <button data-value="toast">Notifikasi</button>
-              <button data-value="attention" data-text="attention">Kedip taskbar</button>
-              <button data-value="both">Keduanya</button>
+              <button data-value="toast">Banner</button>
+              <button data-value="attention" data-text="attention">Flash</button>
+              <button data-value="both">Both</button>
             </div>
           </div>
           <div class="card">
@@ -583,29 +580,27 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
           </div>
         </div>
 
-        <div class="group-title">Akun</div>
+        <div class="group-title">Accounts</div>
         <div class="cards">
           <div class="card">
             <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
             <div class="card-text"><div class="card-title">WhatsApp</div></div>
-            <button class="btn" data-action="reload:wa">Muat ulang</button>
-            <button class="btn danger" data-action="reset:wa">Keluar akun</button>
+            <button class="btn" data-action="reload:wa">Reload</button>
+            <button class="btn danger" data-action="reset:wa">Sign out</button>
           </div>
           <div class="card">
             <svg class="svc-ico" style="color:var(--tg)" aria-hidden="true"><use href="#ico-tg"/></svg>
-            <div class="card-text">
-              <div class="card-title">Telegram</div>
-            </div>
-            <div class="combo" data-choice="telegramVersion" title="Versi Telegram Web">
+            <div class="card-text"><div class="card-title">Telegram</div></div>
+            <div class="combo" data-choice="telegramVersion" title="Telegram Web version">
               <button data-value="a">Web A</button>
               <button data-value="k">Web K</button>
             </div>
-            <button class="btn" data-action="reload:tg">Muat ulang</button>
-            <button class="btn danger" data-action="reset:tg">Keluar akun</button>
+            <button class="btn" data-action="reload:tg">Reload</button>
+            <button class="btn danger" data-action="reset:tg">Sign out</button>
           </div>
         </div>
 
-        <div class="group-title">Pembaruan</div>
+        <div class="group-title">Updates</div>
         <div class="cards">
           <div class="card wrap">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-update"/></svg></span>
@@ -614,17 +609,14 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
               <div class="card-sub" id="updStatus"></div>
               <div class="progress" id="updProgress" hidden><i></i></div>
             </div>
-            <button class="btn" id="updCheck" data-update="check">Periksa pembaruan</button>
-            <button class="btn primary" id="updInstall" data-update="install" hidden>Perbarui sekarang</button>
-            <button class="btn" id="updSkip" data-update="skip" hidden>Lewati versi ini</button>
+            <button class="btn" id="updCheck" data-update="check">Check for updates</button>
+            <button class="btn primary" id="updInstall" data-update="install" hidden>Update</button>
+            <button class="btn" id="updSkip" data-update="skip" hidden>Skip this version</button>
             <div class="notes" id="updNotes"></div>
           </div>
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-auto"/></svg></span>
-            <div class="card-text">
-              <div class="card-title">Periksa pembaruan otomatis</div>
-              <div class="card-sub">Saat Twincxt dibuka dan setiap 6 jam. Unduhan berjalan di latar belakang; pemasangan menunggu persetujuan Anda.</div>
-            </div>
+            <div class="card-text"><div class="card-title">Check automatically</div></div>
             <button class="toggle" role="switch" data-setting="autoUpdate"><span class="state"></span><span class="track"></span></button>
           </div>
         </div>
@@ -653,15 +645,12 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 
   // Words that differ per system.
   var TEXT = {
-    windows: { autostart: 'Buka saat Windows menyala', startHidden: 'Mulai tersembunyi di tray', keepRunning: 'Tetap di tray',
-      attention: 'Kedip taskbar', notifyModeSub: 'Notifikasi Windows, ikon taskbar yang berkedip, atau keduanya.',
-      one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' },
-    mac: { autostart: 'Buka saat login', startHidden: 'Mulai tanpa membuka jendela', keepRunning: 'Tetap berjalan',
-      attention: 'Pantulkan Dock', notifyModeSub: 'Notifikasi macOS, ikon Dock yang memantul, atau keduanya.',
-      one: '⌘1', two: '⌘2', settings: '⌘,' },
-    linux: { autostart: 'Buka saat login', startHidden: 'Mulai tersembunyi di tray', keepRunning: 'Tetap di tray',
-      attention: 'Sorot di taskbar', notifyModeSub: 'Notifikasi desktop, jendela yang disorot di taskbar, atau keduanya.',
-      one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' }
+    windows: { autostart: 'Start with Windows', startHidden: 'Start minimized', keepRunning: 'Keep in tray',
+      attention: 'Flash taskbar', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' },
+    mac: { autostart: 'Open at login', startHidden: 'Start hidden', keepRunning: 'Keep running',
+      attention: 'Bounce Dock', one: '⌘1', two: '⌘2', settings: '⌘,' },
+    linux: { autostart: 'Open at login', startHidden: 'Start minimized', keepRunning: 'Keep in tray',
+      attention: 'Highlight', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' }
   };
 
   // WebView2 (Windows) or the Electron preload (macOS, Linux).
@@ -676,13 +665,13 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     var title = 'Twincxt ' + (s.version || '');
     var status = '', canInstall = false, canSkip = false, checking = false;
     switch (u.status) {
-      case 'checking': status = 'Memeriksa pembaruan…'; checking = true; break;
-      case 'latest': status = 'Anda memakai versi terbaru.'; break;
-      case 'available': status = 'Versi ' + u.version + ' tersedia.'; canInstall = true; canSkip = true; break;
-      case 'downloading': status = 'Mengunduh versi ' + u.version + '… ' + Math.round((u.progress || 0) * 100) + '%'; break;
-      case 'ready': status = 'Versi ' + u.version + ' siap dipasang.'; canInstall = true; canSkip = true; break;
-      case 'installing': status = 'Menutup Twincxt dan memasang versi ' + u.version + '…'; break;
-      case 'error': status = u.error || 'Pembaruan gagal.'; break;
+      case 'checking': status = 'Checking…'; checking = true; break;
+      case 'latest': status = 'Up to date'; break;
+      case 'available': status = 'Version ' + u.version + ' available'; canInstall = true; canSkip = true; break;
+      case 'downloading': status = 'Downloading ' + u.version + '… ' + Math.round((u.progress || 0) * 100) + '%'; break;
+      case 'ready': status = 'Version ' + u.version + ' ready to install'; canInstall = true; canSkip = true; break;
+      case 'installing': status = 'Installing ' + u.version + '…'; break;
+      case 'error': status = u.error || 'Update failed'; break;
       default: status = '';
     }
     document.getElementById('updTitle').textContent = title;
@@ -692,14 +681,14 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     p.firstElementChild.style.width = Math.round((u.progress || 0) * 100) + '%';
     var inst = document.getElementById('updInstall');
     inst.hidden = !canInstall;
-    inst.textContent = u.status === 'ready' ? 'Mulai ulang & perbarui' : 'Unduh & perbarui';
+    inst.textContent = u.status === 'ready' ? 'Restart to update' : 'Update';
     document.getElementById('updSkip').hidden = !canSkip || !!u.required;
     var req = document.getElementById('updRequired');
     req.hidden = !u.required;
     if (u.required) {
       document.getElementById('updRequiredText').textContent = u.status === 'downloading'
-        ? 'Mengunduh versi ' + u.version + '\u2026 ' + Math.round((u.progress || 0) * 100) + '%'
-        : 'Pasang versi ' + u.version + ' untuk kembali memakai WhatsApp dan Telegram.';
+        ? 'Downloading ' + u.version + '\u2026 ' + Math.round((u.progress || 0) * 100) + '%'
+        : 'Install version ' + u.version + ' to keep using Twincxt.';
       req.querySelector('button').hidden = !canInstall;
     }
     var check = document.getElementById('updCheck');
@@ -720,8 +709,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       if (t[el.dataset.text]) el.textContent = t[el.dataset.text];
     });
     document.querySelector('.half[data-svc="wa"]').title = 'WhatsApp (' + t.one + ')';
-    document.querySelector('.half[data-svc="tg"]').title = 'Telegram (' + t.two + ', Ctrl+Tab untuk berganti)';
-    document.getElementById('settingsBtn').title = 'Pengaturan (' + t.settings + ')';
+    document.querySelector('.half[data-svc="tg"]').title = 'Telegram (' + t.two + ')';
+    document.getElementById('settingsBtn').title = 'Settings (' + t.settings + ')';
 
     document.querySelectorAll('.half').forEach(function (b) {
       if (b.dataset.svc === s.active && !s.settingsOpen) b.setAttribute('aria-current', 'page');
@@ -739,8 +728,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     document.getElementById('maxBtn').title = s.maximized ? 'Restore' : 'Maximize';
     document.getElementById('zoomVal').textContent = s.zoom[s.active] + '%';
     var n = s.unread[s.active];
-    document.getElementById('stripCtx').textContent = s.settingsOpen ? 'Pengaturan'
-      : NAMES[s.active] + (n > 0 ? '  ·  ' + n + ' belum dibaca' : '');
+    document.getElementById('stripCtx').textContent = s.settingsOpen ? 'Settings'
+      : NAMES[s.active] + (n > 0 ? '  ·  ' + n + ' unread' : '');
 
     document.querySelectorAll('[data-zoom-for]').forEach(function (z) {
       z.querySelector('.val').textContent = s.zoom[z.dataset.zoomFor] + '%';
@@ -748,7 +737,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     document.querySelectorAll('.toggle').forEach(function (b) {
       var on = !!s[b.dataset.setting];
       b.setAttribute('aria-checked', String(on));
-      b.querySelector('.state').textContent = on ? 'Aktif' : 'Nonaktif';
+      b.querySelector('.state').textContent = on ? 'On' : 'Off';
     });
     document.querySelectorAll('[data-choice]').forEach(function (g) {
       g.querySelectorAll('button').forEach(function (b) {
@@ -756,7 +745,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       });
     });
     renderUpdate();
-    document.title = s.settingsOpen ? 'Pengaturan - Twincxt' : NAMES[s.active] + ' - Twincxt';
+    document.title = s.settingsOpen ? 'Settings - Twincxt' : NAMES[s.active] + ' - Twincxt';
   }
 
   function locked() { return !!(s.update && s.update.required); }
@@ -799,13 +788,13 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   document.querySelectorAll('[data-update]').forEach(function (b) {
     b.addEventListener('click', function () { send('update', b.dataset.update); });
   });
-  // "Keluar akun" needs a second click within 4 s; the label says what the second click does.
+  // "Sign out" needs a second click within 4 s; the label says what the second click does.
   document.querySelectorAll('[data-action]').forEach(function (b) {
     var label = b.textContent, timer = null;
     b.addEventListener('click', function () {
       if (b.classList.contains('danger') && !b.classList.contains('armed')) {
         b.classList.add('armed');
-        b.textContent = 'Klik lagi untuk keluar';
+        b.textContent = 'Click again to sign out';
         timer = setTimeout(function () { b.classList.remove('armed'); b.textContent = label; }, 4000);
         return;
       }
@@ -813,7 +802,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       b.classList.remove('armed');
       send('action', b.dataset.action);
       b.disabled = true;
-      b.textContent = b.classList.contains('danger') ? 'Keluar…' : 'Memuat ulang…';
+      b.textContent = b.classList.contains('danger') ? 'Signing out…' : 'Reloading…';
       setTimeout(function () { b.disabled = false; b.textContent = label; }, 2500);
     });
   });
@@ -866,8 +855,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     if (h.indexOf('tg') >= 0) s.active = 'tg';
     if (h.indexOf('mac') >= 0) s.platform = 'mac';
     if (h.indexOf('linux') >= 0) s.platform = 'linux';
-    if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Contoh catatan rilis\n- Perbaikan kecil' };
-    if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Contoh', required: true };
+    if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example release note\n- Small fixes' };
+    if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example', required: true };
     s.autostart = true;
     var fill = document.createElement('div');
     fill.className = 'preview-fill';

@@ -52,12 +52,12 @@ Logins and settings are kept outside the program folder (Windows
 ## Updates
 
 Twincxt checks the latest GitHub release when it starts and every 6 hours
-(Settings → Pembaruan; can be turned off).
+(Settings → Updates; can be turned off).
 
 1. A newer version is downloaded in the background. Its SHA-256 must match the
    checksum GitHub lists for the file (or `SHA256SUMS-*.txt` in the release);
    otherwise it is deleted and never run.
-2. It is installed only when you press **Mulai ulang & perbarui**:
+2. It is installed only when you press **Restart to update**:
    - Windows: the installer is started as its own process (so it is not closed
      together with Twincxt), Twincxt closes cleanly (logins saved), the installer
      updates in place silently and opens Twincxt again.

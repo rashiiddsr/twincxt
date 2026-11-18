@@ -160,7 +160,7 @@ function pushUnread(s) {
   const total = svcs.wa.unread + svcs.tg.unread;
   if (IS_MAC) app.dock.setBadge(total ? String(total) : '');
   else app.setBadgeCount(total);
-  if (tray) tray.setToolTip(total ? `Twincxt · ${total} belum dibaca` : 'Twincxt');
+  if (tray) tray.setToolTip(total ? `Twincxt · ${total} unread` : 'Twincxt');
 }
 
 function applyStrip() {
@@ -453,28 +453,28 @@ function contextMenu(wc, p) {
     items.push({ label: word, click: () => wc.replaceMisspelling(word) });
   }
   if (p.misspelledWord) {
-    items.push({ label: 'Tambahkan ke kamus', click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) });
+    items.push({ label: 'Add to Dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) });
     items.push({ type: 'separator' });
   }
   if (p.linkURL) {
-    items.push({ label: 'Buka tautan di browser', click: () => shell.openExternal(p.linkURL) });
-    items.push({ label: 'Salin tautan', click: () => clipboard.writeText(p.linkURL) });
+    items.push({ label: 'Open Link in Browser', click: () => shell.openExternal(p.linkURL) });
+    items.push({ label: 'Copy Link', click: () => clipboard.writeText(p.linkURL) });
     items.push({ type: 'separator' });
   }
   if (p.mediaType === 'image') {
-    items.push({ label: 'Salin gambar', click: () => wc.copyImageAt(p.x, p.y) });
+    items.push({ label: 'Copy Image', click: () => wc.copyImageAt(p.x, p.y) });
     items.push({ type: 'separator' });
   }
   const f = p.editFlags || {};
   if (p.isEditable) {
-    items.push({ label: 'Batalkan', role: 'undo', enabled: f.canUndo });
-    items.push({ label: 'Ulangi', role: 'redo', enabled: f.canRedo });
+    items.push({ label: 'Undo', role: 'undo', enabled: f.canUndo });
+    items.push({ label: 'Redo', role: 'redo', enabled: f.canRedo });
     items.push({ type: 'separator' });
-    items.push({ label: 'Potong', role: 'cut', enabled: f.canCut });
+    items.push({ label: 'Cut', role: 'cut', enabled: f.canCut });
   }
-  if (p.isEditable || p.selectionText) items.push({ label: 'Salin', role: 'copy', enabled: f.canCopy });
-  if (p.isEditable) items.push({ label: 'Tempel', role: 'paste', enabled: f.canPaste });
-  if (p.isEditable || p.selectionText) items.push({ label: 'Pilih semua', role: 'selectAll' });
+  if (p.isEditable || p.selectionText) items.push({ label: 'Copy', role: 'copy', enabled: f.canCopy });
+  if (p.isEditable) items.push({ label: 'Paste', role: 'paste', enabled: f.canPaste });
+  if (p.isEditable || p.selectionText) items.push({ label: 'Select All', role: 'selectAll' });
   while (items.length && items[items.length - 1].type === 'separator') items.pop();
   if (items.length) Menu.buildFromTemplate(items).popup();
 }
@@ -675,62 +675,61 @@ function buildMenu() {
     {
       label: 'Twincxt',
       submenu: [
-        { label: 'Tentang Twincxt', role: 'about' },
-        { label: 'Periksa Pembaruan…', click: () => { toggleSettings(true); showWindow(); updater.check(true); } },
+        { label: 'About Twincxt', role: 'about' },
+        { label: 'Check for Updates…', click: () => { toggleSettings(true); showWindow(); updater.check(true); } },
         { type: 'separator' },
-        { label: 'Pengaturan…', accelerator: 'Cmd+,', click: () => { toggleSettings(true); showWindow(); } },
+        { label: 'Settings…', accelerator: 'Cmd+,', click: () => { toggleSettings(true); showWindow(); } },
         { type: 'separator' },
-        { label: 'Sembunyikan Twincxt', role: 'hide' },
-        { label: 'Sembunyikan Lainnya', role: 'hideOthers' },
-        { label: 'Tampilkan Semua', role: 'unhide' },
+        { label: 'Hide Twincxt', role: 'hide' },
+        { label: 'Hide Others', role: 'hideOthers' },
+        { label: 'Show All', role: 'unhide' },
         { type: 'separator' },
-        { label: 'Keluar dari Twincxt', accelerator: 'Cmd+Q', click: () => { quitting = true; app.quit(); } },
+        { label: 'Quit Twincxt', accelerator: 'Cmd+Q', click: () => { quitting = true; app.quit(); } },
       ],
     },
     {
       label: 'Edit',
       submenu: [
-        { label: 'Batalkan', role: 'undo' },
-        { label: 'Ulangi', role: 'redo' },
+        { label: 'Undo', role: 'undo' },
+        { label: 'Redo', role: 'redo' },
         { type: 'separator' },
-        { label: 'Potong', role: 'cut' },
-        { label: 'Salin', role: 'copy' },
-        { label: 'Tempel', role: 'paste' },
-        { label: 'Tempel dan Cocokkan Gaya', role: 'pasteAndMatchStyle' },
-        { label: 'Pilih Semua', role: 'selectAll' },
+        { label: 'Cut', role: 'cut' },
+        { label: 'Copy', role: 'copy' },
+        { label: 'Paste', role: 'paste' },
+        { label: 'Paste and Match Style', role: 'pasteAndMatchStyle' },
+        { label: 'Select All', role: 'selectAll' },
       ],
     },
     {
-      label: 'Tampilan',
+      label: 'View',
       submenu: [
         { label: 'WhatsApp', accelerator: 'Cmd+1', click: () => selectService('wa', 'menu') },
         { label: 'Telegram', accelerator: 'Cmd+2', click: () => selectService('tg', 'menu') },
-        { label: 'Ganti Layanan', accelerator: 'Ctrl+Tab', click: () => selectService(cfg.active === 'wa' ? 'tg' : 'wa', 'menu') },
+        { label: 'Switch Service', accelerator: 'Ctrl+Tab', click: () => selectService(cfg.active === 'wa' ? 'tg' : 'wa', 'menu') },
         { type: 'separator' },
-        { label: 'Perbesar', accelerator: 'Cmd+=', click: () => zoomBy(1) },
-        { label: 'Perkecil', accelerator: 'Cmd+-', click: () => zoomBy(-1) },
-        { label: 'Ukuran Asli', accelerator: 'Cmd+0', click: () => zoomBy(0) },
+        { label: 'Zoom In', accelerator: 'Cmd+=', click: () => zoomBy(1) },
+        { label: 'Zoom Out', accelerator: 'Cmd+-', click: () => zoomBy(-1) },
+        { label: 'Actual Size', accelerator: 'Cmd+0', click: () => zoomBy(0) },
         { type: 'separator' },
-        { label: 'Muat Ulang Layanan', accelerator: 'Cmd+R', click: () => runAction('reload:' + cfg.active) },
-        { label: 'Layar Penuh', role: 'togglefullscreen' },
+        { label: 'Reload', accelerator: 'Cmd+R', click: () => runAction('reload:' + cfg.active) },
+        { label: 'Toggle Full Screen', role: 'togglefullscreen' },
       ],
     },
     {
-      label: 'Jendela',
+      label: 'Window',
       submenu: [
-        { label: 'Perkecil', role: 'minimize' },
+        { label: 'Minimize', role: 'minimize' },
         { label: 'Zoom', role: 'zoom' },
-        { label: 'Tutup Jendela', accelerator: 'Cmd+W', click: () => win && win.close() },
+        { label: 'Close Window', accelerator: 'Cmd+W', click: () => win && win.close() },
         { type: 'separator' },
-        { label: 'Bawa Semua ke Depan', role: 'front' },
+        { label: 'Bring All to Front', role: 'front' },
       ],
     },
     {
-      label: 'Bantuan',
+      label: 'Help',
       role: 'help',
       submenu: [
-        { label: 'Halaman Twincxt', click: () => shell.openExternal('https://github.com/rashiiddsr/twincxt') },
-        { label: 'Catatan Rilis', click: () => shell.openExternal('https://github.com/rashiiddsr/twincxt/releases') },
+        { label: 'Release Notes', click: () => shell.openExternal('https://github.com/rashiiddsr/twincxt/releases') },
       ],
     },
   ]));
@@ -743,13 +742,13 @@ function buildTray() {
   tray.setToolTip('Twincxt');
   const label = (name, n) => (n > 0 ? `${name}  (${n})` : name);
   const refresh = () => tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Buka Twincxt', click: showWindow },
+    { label: 'Open Twincxt', click: showWindow },
     { type: 'separator' },
     { label: label('WhatsApp', svcs.wa.unread), click: () => { selectService('wa', 'tray'); showWindow(); } },
     { label: label('Telegram', svcs.tg.unread), click: () => { selectService('tg', 'tray'); showWindow(); } },
     { type: 'separator' },
-    { label: 'Pengaturan', click: () => { toggleSettings(true); showWindow(); } },
-    { label: 'Keluar', click: () => { quitting = true; app.quit(); } },
+    { label: 'Settings', click: () => { toggleSettings(true); showWindow(); } },
+    { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));
   refresh();
   setInterval(refresh, 5000);
@@ -782,7 +781,7 @@ function setupSession() {
     item.setSavePath(target);
     item.once('done', (_ev, state) => {
       if (state !== 'completed' || !Notification.isSupported()) return;
-      const n = new Notification({ title: 'Unduhan selesai', body: path.basename(target), icon: path.join(UI, 'icons', 'app.png'), silent: true });
+      const n = new Notification({ title: 'Download complete', body: path.basename(target), icon: path.join(UI, 'icons', 'app.png'), silent: true });
       n.on('click', () => shell.showItemInFolder(target));
       n.show();
     });

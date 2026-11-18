@@ -6,12 +6,12 @@ package main
 //
 // How it works:
 //   1. Check: the newest GitHub release of releaseRepo is read at start (after
-//      a short delay) and every 6 hours, and when you press "Periksa pembaruan".
+//      a short delay) and every 6 hours, and when you press "Check for updates".
 //   2. Download: with automatic checks on, a newer version is downloaded in the
 //      background to %LOCALAPPDATA%\Twincxt\updates. Its SHA-256 must match the
 //      checksum GitHub publishes for the file (or SHA256SUMS.txt in the
 //      release); otherwise it is deleted and never run.
-//   3. Install, only when you press "Mulai ulang & perbarui": the installer is
+//   3. Install, only when you press "Restart to update": the installer is
 //      started on its own (not as a child that could be closed together with
 //      Twincxt, the problem Sonara had), Twincxt then closes itself cleanly so
 //      logins are saved, and the installer updates in place (same folder, data
@@ -145,7 +145,7 @@ func (u *updater) check(manual bool) {
 			debugLog("update: check failed: " + err.Error())
 			if manual {
 				u.set(func(s *updateState) {
-					*s = updateState{Status: "error", Error: "Tidak bisa memeriksa pembaruan. Periksa koneksi internet lalu coba lagi."}
+					*s = updateState{Status: "error", Error: "Can't check for updates. Check your connection and try again."}
 				})
 			}
 			return
@@ -200,7 +200,7 @@ func (u *updater) download(thenInstall bool) {
 		if err != nil {
 			debugLog("update: download failed: " + err.Error())
 			u.set(func(s *updateState) {
-				*s = updateState{Status: "error", Version: version, Error: "Unduhan pembaruan gagal: " + err.Error(), Required: required}
+				*s = updateState{Status: "error", Version: version, Error: "Download failed: " + err.Error(), Required: required}
 			})
 			return
 		}
@@ -220,8 +220,8 @@ func (u *updater) download(thenInstall bool) {
 		u.mu.Unlock()
 		if announce {
 			toast{
-				Title:  "Pembaruan Twincxt " + version + " siap",
-				Body:   "Buka Pengaturan untuk memasangnya.",
+				Title:  "Twincxt " + version + " is ready",
+				Body:   "Open Settings to install it.",
 				Launch: protocolName + ":settings",
 				Icon:   appIconPath(),
 				Silent: true,
@@ -254,7 +254,7 @@ func (u *updater) install() {
 	r, _, _ := pShellExecute.Call(0, utf16ptr("open"), utf16ptr(file), utf16ptr(params), 0, SW_SHOWNORMAL)
 	if r <= 32 {
 		u.set(func(s *updateState) {
-			*s = updateState{Status: "error", Version: version, Error: "Installer tidak bisa dijalankan (izin ditolak?). Coba lagi."}
+			*s = updateState{Status: "error", Version: version, Error: "The installer couldn't start. Try again."}
 		})
 		return
 	}
@@ -336,7 +336,7 @@ func expectedSHA256(rel *release, asset *releaseAsset) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("checksum tidak tersedia, file tidak dipasang")
+	return "", errors.New("no checksum published for this file")
 }
 
 func updatesDir() string {
@@ -415,7 +415,7 @@ func fetchAndVerify(rel *release, asset *releaseAsset, progress func(float64)) (
 	f.Close()
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
 		_ = os.Remove(partial)
-		return "", errors.New("file rusak atau tidak cocok dengan checksum rilis")
+		return "", errors.New("file doesn't match the release checksum")
 	}
 	if err := os.Rename(partial, final); err != nil {
 		return "", err

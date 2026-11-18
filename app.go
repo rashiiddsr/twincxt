@@ -1105,7 +1105,7 @@ func (a *app) notify(s *service, title, body string) {
 	if a.cfg.NotifyMode != "attention" {
 		t.show()
 	}
-	// "Kedip taskbar": the taskbar button flashes until Twincxt is opened.
+	// "Flash taskbar": the taskbar button flashes until Twincxt is opened.
 	if a.cfg.NotifyMode != "toast" && !focused {
 		fw := flashWInfo{Hwnd: a.hwnd, Flags: FLASHW_TRAY | FLASHW_TIMERNOFG}
 		fw.Size = uint32(unsafe.Sizeof(fw))
@@ -1305,7 +1305,7 @@ func (a *app) trayData() notifyIconData {
 	d.Icon = loadAppIcon(scale(16, dpiOf(a.hwnd)))
 	tip := appName
 	if total := a.svcs["wa"].unread + a.svcs["tg"].unread; total > 0 {
-		tip = fmt.Sprintf("%s · %d belum dibaca", appName, total)
+		tip = fmt.Sprintf("%s · %d unread", appName, total)
 	}
 	copy(d.Tip[:len(d.Tip)-1], windows.StringToUTF16(tip))
 	return d
@@ -1341,13 +1341,13 @@ func (a *app) trayMenu() {
 		}
 		return name
 	}
-	pAppendMenu.Call(menu, MF_STRING, cmdOpen, utf16ptr("Buka "+appName))
+	pAppendMenu.Call(menu, MF_STRING, cmdOpen, utf16ptr("Open "+appName))
 	pAppendMenu.Call(menu, MF_SEPARATOR, 0, 0)
 	pAppendMenu.Call(menu, MF_STRING, cmdWA, utf16ptr(label("WhatsApp", a.svcs["wa"].unread)))
 	pAppendMenu.Call(menu, MF_STRING, cmdTG, utf16ptr(label("Telegram", a.svcs["tg"].unread)))
 	pAppendMenu.Call(menu, MF_SEPARATOR, 0, 0)
-	pAppendMenu.Call(menu, MF_STRING, cmdSettings, utf16ptr("Pengaturan"))
-	pAppendMenu.Call(menu, MF_STRING, cmdQuit, utf16ptr("Keluar"))
+	pAppendMenu.Call(menu, MF_STRING, cmdSettings, utf16ptr("Settings"))
+	pAppendMenu.Call(menu, MF_STRING, cmdQuit, utf16ptr("Quit"))
 	var pt point
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 	pSetForegroundWindow.Call(a.hwnd)

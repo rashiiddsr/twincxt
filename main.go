@@ -88,8 +88,8 @@ func main() {
 	migrateLegacyProfile(dataDir)
 	err := createEnvironment(dataDir, func(env *environment, hr uintptr) {
 		if env == nil {
-			messageBox("Microsoft Edge WebView2 Runtime tidak ditemukan atau gagal dijalankan.\n\n"+
-				"Pasang WebView2 Runtime dari situs Microsoft, lalu buka Twincxt lagi.", appName, MB_OK|MB_ICONERROR)
+			messageBox("Microsoft Edge WebView2 Runtime is missing or failed to start.\n\n"+
+				"Install the WebView2 Runtime from Microsoft, then open Twincxt again.", appName, MB_OK|MB_ICONERROR)
 			a.quit()
 			return
 		}
@@ -97,7 +97,7 @@ func main() {
 		a.startWebViews()
 	})
 	if err != nil {
-		messageBox("WebView2 gagal dimuat: "+err.Error(), appName, MB_OK|MB_ICONERROR)
+		messageBox("WebView2 failed to load: "+err.Error(), appName, MB_OK|MB_ICONERROR)
 		return
 	}
 

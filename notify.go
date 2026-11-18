@@ -122,7 +122,7 @@ func watchDownload(path string) {
 			}
 			if info.Size() == lastSize {
 				toast{
-					Title:  "Unduhan selesai",
+					Title:  "Download complete",
 					Body:   filepath.Base(path),
 					Launch: "file:///" + filepath.ToSlash(filepath.Dir(path)),
 					Icon:   appIconPath(),
