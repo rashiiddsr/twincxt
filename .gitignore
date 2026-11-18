@@ -1,0 +1,8 @@
+/build/
+/dist/
+*.syso
+*.tmp
+*.log
+desktop/node_modules/
+desktop/dist/
+desktop/ui/

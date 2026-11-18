@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twincxt</title>
+<style>
+/*
+ * Twincxt shell, shared by Windows (WebView2), macOS and Linux (Electron).
+ * The sidebar is split in two halves; a solid block of the live service's
+ * colour slides between them. Everything else follows the system it runs on:
+ *   windows: Windows 11 Settings (Segoe UI Variable, 4-8px radii, cards)
+ *   mac:     macOS System Settings (SF, grouped inset lists, traffic lights)
+ *   linux:   GNOME / libadwaita (Cantarell, boxed lists, Adwaita switches)
+ */
+:root {
+  --wa: #21C063;
+  --tg: #2AABEE;
+  --danger: #C42B1C;
+
+  --side-w: 76px;
+  --strip-h: 36px;
+  --foot-h: 64px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI", system-ui, sans-serif;
+  --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+
+  --group-gap: 2px;
+  --card-radius: 6px;
+  --list-radius: 6px;
+  --control-radius: 4px;
+
+  color-scheme: light;
+  --side: #EBEBEB;
+  --side-hover: #E2E2E2;
+  --side-line: #DADADA;
+  --page: #F3F3F3;
+  --card: #FBFBFB;
+  --card-hover: #F6F6F6;
+  --stroke: #E5E5E5;
+  --stroke-strong: #D1D1D1;
+  --text: #1A1A1A;
+  --text-2: #5D5D5D;
+  --accent: #005FB8;
+  --accent-text: #FFFFFF;
+  --control: #FFFFFF;
+  --strip: #FFFFFF;
+  --strip-text: #3A3A3A;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --side: #1A1A1A;
+  --side-hover: #242424;
+  --side-line: #2B2B2B;
+  --page: #202020;
+  --card: #2B2B2B;
+  --card-hover: #323232;
+  --stroke: #1D1D1D;
+  --stroke-strong: #3A3A3A;
+  --text: #FFFFFF;
+  --text-2: #C5C5C5;
+  --accent: #60CDFF;
+  --accent-text: #000000;
+  --control: #373737;
+  --strip: #161717;
+  --strip-text: #D6D6D6;
+}
+
+/* ---- macOS ---- */
+:root[data-platform="mac"] {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --font-small: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --group-gap: 0;
+  --card-radius: 0;
+  --list-radius: 10px;
+  --control-radius: 6px;
+  --strip-h: 38px;
+  --side: #E8E8E8;
+  --side-hover: #DEDEDE;
+  --side-line: #D5D5D5;
+  --page: #ECECEC;
+  --card: #FFFFFF;
+  --card-hover: #F7F7F7;
+  --stroke: #E2E2E2;
+  --accent: #007AFF;
+}
+:root[data-platform="mac"][data-theme="dark"] {
+  --side: #252525;
+  --side-hover: #2E2E2E;
+  --side-line: #333333;
+  --page: #1E1E1E;
+  --card: #2C2C2E;
+  --card-hover: #333336;
+  --stroke: #3A3A3C;
+  --accent: #0A84FF;
+  --accent-text: #FFFFFF;
+}
+
+/* ---- Linux (GNOME / libadwaita) ---- */
+:root[data-platform="linux"] {
+  --font: "Cantarell", "Inter", "Ubuntu", "Noto Sans", system-ui, sans-serif;
+  --font-display: "Cantarell", "Inter", "Ubuntu", "Noto Sans", system-ui, sans-serif;
+  --font-small: "Cantarell", "Inter", "Ubuntu", "Noto Sans", system-ui, sans-serif;
+  --group-gap: 0;
+  --card-radius: 0;
+  --list-radius: 12px;
+  --control-radius: 6px;
+  --side: #EBEBED;
+  --side-hover: #E0E0E3;
+  --side-line: #D9D9DC;
+  --page: #FAFAFB;
+  --card: #FFFFFF;
+  --card-hover: #F4F4F6;
+  --stroke: #E4E4E7;
+  --stroke-strong: #CFCFD4;
+  --accent: #3584E4;
+  --accent-text: #FFFFFF;
+}
+:root[data-platform="linux"][data-theme="dark"] {
+  --side: #2E2E32;
+  --side-hover: #38383D;
+  --side-line: #3A3A3F;
+  --page: #222226;
+  --card: #36363A;
+  --card-hover: #3E3E43;
+  --stroke: #444449;
+  --stroke-strong: #55555B;
+  --accent: #78AEED;
+  --accent-text: #1E1E1E;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 14px/20px var(--font);
+  color: var(--text);
+  background: var(--side);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: default; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: -3px; border-radius: 4px; }
+svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Electron (macOS/Linux): drag regions are declared in CSS. */
+.drag-area { -webkit-app-region: drag; }
+.drag-area button, .no-drag { -webkit-app-region: no-drag; }
+
+.app {
+  display: grid;
+  grid-template-columns: var(--side-w) 1fr;
+  grid-template-rows: var(--strip-h) 1fr;
+  height: 100%;
+}
+
+/* ---------- sidebar ---------- */
+.side {
+  grid-row: 1 / 3;
+  display: grid;
+  grid-template-rows: var(--strip-h) 1fr var(--foot-h);
+  border-right: 1px solid var(--side-line);
+  min-height: 0;
+}
+.mark { display: grid; place-items: center; }
+.mark svg { width: 20px; height: 20px; }
+/* macOS: the traffic lights sit in this corner. */
+:root[data-platform="mac"] .mark svg { display: none; }
+
+.halves {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+  border-top: 1px solid var(--side-line);
+  border-bottom: 1px solid var(--side-line);
+}
+/* Signature: one colour block that slides to the live half. */
+.live {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 50%;
+  background: var(--wa);
+  transition: transform .38s var(--ease), background-color .38s var(--ease), opacity .2s;
+  pointer-events: none;
+}
+.app[data-active="tg"] .live { transform: translateY(100%); background: var(--tg); }
+.app.settings-open .live { opacity: 0; }
+
+.half {
+  --c: var(--wa);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-2);
+  transition: color .25s var(--ease), background-color .15s;
+}
+.half[data-svc="tg"] { --c: var(--tg); border-top: 1px solid var(--side-line); }
+.half:hover { background: var(--side-hover); }
+.half[aria-current="page"] { color: #FFFFFF; }
+.half[aria-current="page"]:hover { background: transparent; }
+.half > svg { width: 28px; height: 28px; display: block; position: relative; }
+.half:not([aria-current="page"]) > svg { color: var(--c); }
+.half-name {
+  position: relative;
+  font: 600 11px/14px var(--font-small);
+  letter-spacing: .01em;
+}
+.count {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font: 600 11px/18px var(--font-small);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.half[aria-current="page"] .count { background: #FFFFFF; color: #1A1A1A; }
+.count:empty { display: none; }
+.half.loading .half-name::after {
+  content: "";
+  position: absolute;
+  left: 50%; bottom: -8px;
+  width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: blink 1s ease-in-out infinite;
+}
+@keyframes blink { 50% { opacity: .2; } }
+
+.foot { display: grid; place-items: center; background: var(--side); }
+.icon-btn {
+  position: relative;
+  width: 40px; height: 36px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  color: var(--text-2);
+}
+.icon-btn svg.i { width: 18px; height: 18px; }
+.icon-btn:hover { background: var(--side-hover); color: var(--text); }
+.icon-btn[aria-pressed="true"] { background: var(--side-hover); color: var(--text); }
+.icon-btn[aria-pressed="true"]::before {
+  content: ""; position: absolute; left: -18px; top: 10px;
+  width: 3px; height: 16px; border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+/* An update is waiting: a dot on the gear. */
+.icon-btn.has-update::after {
+  content: ""; position: absolute; top: 6px; right: 8px;
+  width: 8px; height: 8px; border-radius: 4px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--side);
+}
+
+/* ---------- title strip ---------- */
+.strip {
+  display: flex;
+  align-items: stretch;
+  background: var(--strip);
+  color: var(--strip-text);
+  min-width: 0;
+}
+.app.settings-open .strip { background: var(--page); color: var(--text); }
+.drag { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding-left: 16px; white-space: nowrap; overflow: hidden; }
+.app-name { font: 700 15px/1 var(--font-display); letter-spacing: -.01em; }
+.ctx { font: 13px/1 var(--font); opacity: .62; padding-left: 10px; border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
+.ctx:empty { display: none; }
+.zoom { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
+.zoom button {
+  height: 26px; min-width: 28px;
+  border-radius: var(--control-radius);
+  display: grid; place-items: center;
+}
+.zoom button svg.i { width: 12px; height: 12px; }
+.zoom button:hover { background: color-mix(in srgb, currentColor 9%, transparent); }
+.zoom .val { min-width: 48px; font: 600 12px/26px var(--font-small); font-variant-numeric: tabular-nums; }
+.app.settings-open .zoom { display: none; }
+.win { display: flex; }
+.win button { width: 46px; display: grid; place-items: center; font: 10px/1 var(--icons); }
+.win button:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+.win .close:hover { background: #C42B1C; color: #fff; }
+/* Window buttons are drawn by the shell on Windows only: macOS has its traffic
+   lights and Linux its window manager's title bar. */
+:root[data-platform="mac"] .win, :root[data-platform="linux"] .win { display: none; }
+:root[data-platform="mac"] .zoom, :root[data-platform="linux"] .zoom { margin-right: 12px; }
+
+/* ---------- content ---------- */
+.content { position: relative; background: var(--strip); min-width: 0; min-height: 0; }
+.view { position: absolute; inset: 0; }
+.view[hidden] { display: none; }
+.preview-fill { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-2); font-size: 12px; }
+
+/* ---------- settings ---------- */
+.settings { overflow: auto; background: var(--page); user-select: text; }
+.settings-inner { max-width: 760px; margin: 0 auto; padding: 8px 40px 48px; }
+.settings h1 { font: 600 28px/36px var(--font-display); margin: 0 0 20px; }
+.group-title { font: 600 14px/20px var(--font); margin: 24px 0 8px; }
+.cards { display: grid; gap: var(--group-gap); border-radius: var(--list-radius); }
+.card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--card-radius);
+}
+/* macOS and GNOME: one rounded list per group, rows split by hairlines. */
+:root[data-platform="mac"] .cards, :root[data-platform="linux"] .cards {
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--stroke);
+}
+:root[data-platform="mac"] .card, :root[data-platform="linux"] .card { border: 0; min-height: 52px; }
+:root[data-platform="mac"] .card + .card, :root[data-platform="linux"] .card + .card { border-top: 1px solid var(--stroke); }
+:root[data-platform="mac"] .settings h1 { font-size: 22px; font-weight: 700; }
+:root[data-platform="mac"] .group-title { font-size: 13px; color: var(--text-2); margin-left: 4px; }
+:root[data-platform="linux"] .settings h1 { font-size: 24px; font-weight: 800; }
+:root[data-platform="linux"] .group-title { font-size: 14px; font-weight: 700; margin-left: 4px; }
+:root[data-platform="linux"] .cards { box-shadow: 0 0 0 1px var(--stroke), 0 1px 3px rgba(0, 0, 0, .06); }
+
+.card .glyph { width: 20px; height: 20px; color: var(--text); flex: none; }
+.card .glyph svg.i { width: 20px; height: 20px; stroke-width: 1.5; }
+.card .svc-ico { width: 20px; height: 20px; flex: none; }
+.card-text { flex: 1; min-width: 0; }
+.card-title { font-size: 14px; line-height: 20px; }
+.card-sub { font-size: 12px; line-height: 16px; color: var(--text-2); }
+.card-sub:empty { display: none; }
+.card.wrap { flex-wrap: wrap; }
+.card.wrap .card-text { min-width: 240px; }
+
+.combo {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: calc(var(--control-radius) + 2px);
+  background: var(--page);
+  border: 1px solid var(--stroke-strong);
+}
+.combo button { height: 28px; padding: 0 14px; border-radius: var(--control-radius); color: var(--text-2); white-space: nowrap; }
+.combo button:hover { background: var(--card-hover); color: var(--text); }
+.combo button[aria-pressed="true"] { background: var(--control); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--stroke-strong); }
+:root[data-platform="mac"] .combo { border: 0; background: color-mix(in srgb, var(--text) 8%, transparent); }
+:root[data-platform="mac"] .combo button { height: 24px; padding: 0 12px; font-size: 13px; }
+:root[data-platform="mac"] .combo button[aria-pressed="true"] { box-shadow: 0 1px 2px rgba(0, 0, 0, .18); font-weight: 500; }
+
+.toggle { display: inline-flex; align-items: center; gap: 12px; color: var(--text); }
+.toggle .state { font-size: 14px; min-width: 50px; text-align: right; }
+.toggle .track {
+  width: 40px; height: 20px; border-radius: 10px;
+  border: 1px solid var(--text-2);
+  position: relative;
+  transition: background-color .15s, border-color .15s;
+}
+.toggle .track::after {
+  content: ""; position: absolute; top: 3px; left: 4px;
+  width: 12px; height: 12px; border-radius: 6px;
+  background: var(--text-2);
+  transition: transform .18s var(--ease), background-color .15s;
+}
+.toggle[aria-checked="true"] .track { background: var(--accent); border-color: var(--accent); }
+.toggle[aria-checked="true"] .track::after { background: var(--accent-text); transform: translateX(19px); }
+/* macOS switch: no "On/Off" label, white knob with a shadow. */
+:root[data-platform="mac"] .toggle .state, :root[data-platform="linux"] .toggle .state { display: none; }
+:root[data-platform="mac"] .toggle .track { width: 38px; height: 22px; border-radius: 11px; border: 0; background: color-mix(in srgb, var(--text) 14%, transparent); }
+:root[data-platform="mac"] .toggle .track::after { top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 9px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
+:root[data-platform="mac"] .toggle[aria-checked="true"] .track { background: var(--accent); }
+:root[data-platform="mac"] .toggle[aria-checked="true"] .track::after { background: #fff; transform: translateX(16px); }
+/* Adwaita switch. */
+:root[data-platform="linux"] .toggle .track { width: 46px; height: 26px; border-radius: 13px; border: 0; background: color-mix(in srgb, var(--text) 16%, transparent); }
+:root[data-platform="linux"] .toggle .track::after { top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+:root[data-platform="linux"] .toggle[aria-checked="true"] .track { background: var(--accent); }
+:root[data-platform="linux"] .toggle[aria-checked="true"] .track::after { background: #fff; transform: translateX(20px); }
+
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--stroke-strong); border-radius: calc(var(--control-radius) + 2px); background: var(--control); overflow: hidden; }
+.stepper button { width: 32px; height: 30px; display: grid; place-items: center; }
+.stepper button svg.i { width: 12px; height: 12px; }
+.stepper button:hover { background: var(--card-hover); }
+.stepper .val { width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.btn {
+  height: 32px; padding: 0 14px;
+  border-radius: var(--control-radius);
+  background: var(--control);
+  border: 1px solid var(--stroke-strong);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--card-hover); }
+.btn:disabled { opacity: .6; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger { color: var(--danger); }
+:root[data-theme="dark"] .btn.danger { color: #FF99A4; }
+.btn.armed { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn[hidden] { display: none; }
+
+/* Update progress and notes */
+.progress { height: 4px; border-radius: 2px; background: var(--stroke); overflow: hidden; margin-top: 8px; }
+.progress[hidden] { display: none; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.notes { width: 100%; margin: 4px 0 0 36px; font-size: 13px; line-height: 19px; color: var(--text-2); white-space: pre-line; max-height: 160px; overflow: auto; user-select: text; }
+.notes:empty { display: none; }
+.notice {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 20px; padding: 14px 16px;
+  border-radius: var(--list-radius, 8px);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.notice[hidden] { display: none; }
+.notice b { display: block; }
+.notice span { color: var(--text-2); font-size: 13px; }
+
+/* Invisible band along the top edge: drag it to resize the frameless window (Windows). */
+.top-resize { position: fixed; top: 0; left: 0; right: 138px; height: 4px; cursor: ns-resize; z-index: 10; }
+.app.maximized .top-resize, :root[data-platform="mac"] .top-resize, :root[data-platform="linux"] .top-resize { display: none; }
+
+.no-anim, .no-anim * { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ico-wa" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.2A9.7 9.7 0 0 0 3.6 16.8L2.3 21.7l5-1.3A9.7 9.7 0 1 0 12 2.2Zm0 17.7c-1.5 0-2.9-.4-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 19.9Zm4.4-6c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1l-.8 1c-.1.2-.3.2-.5.1-.2-.1-1-.4-2-1.2-.7-.6-1.2-1.4-1.3-1.7-.1-.2 0-.4.1-.5l.4-.4.2-.4v-.4l-.8-1.8c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.6.3c-.2.2-.8.8-.8 2s.9 2.3 1 2.5c.1.2 1.7 2.6 4.1 3.6 1.5.7 2.1.7 2.9.6.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.4-.2Z"/></symbol>
+  <symbol id="ico-tg" viewBox="0 0 24 24"><path fill="currentColor" d="M21.4 4.2 2.9 11.3c-1.3.5-1.3 1.2-.2 1.6l4.7 1.5 1.8 5.6c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.8c.3-1.3-.5-1.9-1.5-1.5ZM8.6 14.1l9.6-6c.5-.3.9-.1.5.2l-8.1 7.3-.3 3.4-1.7-4.9Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3 8h10"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17Z" fill="currentColor"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-hide" viewBox="0 0 24 24"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11m-4-4 4 4 4-4"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></symbol>
+  <symbol id="i-update" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+</svg>
+<div class="app" id="app" data-active="wa">
+  <div class="top-resize" id="topResize" aria-hidden="true"></div>
+
+  <nav class="side" aria-label="Layanan">
+    <div class="mark drag-area" title="Twincxt">
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path fill="var(--wa)" d="M4.4 1.6h7.4a3 3 0 0 1 0 6H5.9l-3 1.9.6-2.1a3 3 0 0 1 .9-5.8Z"/>
+        <path fill="var(--tg)" d="M15.6 10.4H8.2a3 3 0 0 0 0 6h5.9l3 1.9-.6-2.1a3 3 0 0 0-.9-5.8Z"/>
+      </svg>
+    </div>
+
+    <div class="halves">
+      <div class="live" aria-hidden="true"></div>
+      <button class="half" data-svc="wa">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-wa"/></svg>
+        <span class="half-name">WhatsApp</span>
+        <span class="count" data-count="wa"></span>
+      </button>
+      <button class="half" data-svc="tg">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-tg"/></svg>
+        <span class="half-name">Telegram</span>
+        <span class="count" data-count="tg"></span>
+      </button>
+    </div>
+
+    <div class="foot">
+      <button class="icon-btn" id="settingsBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>
+    </div>
+  </nav>
+
+  <header class="strip drag-area" id="strip">
+    <div class="drag"><span class="app-name">Twincxt</span><span class="ctx" id="stripCtx"></span></div>
+    <div class="zoom no-drag" aria-label="Zoom">
+      <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+      <button class="val" data-zoom="0" title="Kembali ke 100%" id="zoomVal">100%</button>
+      <button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="win no-drag">
+      <button data-win="min" title="Minimize">&#xE921;</button>
+      <button data-win="max" title="Maximize" id="maxBtn">&#xE922;</button>
+      <button data-win="close" class="close" title="Tutup">&#xE8BB;</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- The native host places the WhatsApp / Telegram views over this area. -->
+    <div class="view" id="serviceView"></div>
+
+    <section class="view settings" id="settingsView" hidden>
+      <div class="settings-inner">
+        <h1>Pengaturan</h1>
+        <div class="notice" id="updRequired" hidden>
+          <div style="flex:1">
+            <b>Versi ini sudah tidak didukung</b>
+            <span id="updRequiredText">Perbarui Twincxt untuk kembali memakai WhatsApp dan Telegram.</span>
+          </div>
+          <button class="btn primary" data-update="install">Perbarui sekarang</button>
+        </div>
+
+        <div class="group-title">Tampilan</div>
+        <div class="cards">
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-theme"/></svg></span>
+            <div class="card-text"><div class="card-title">Tema</div></div>
+            <div class="combo" data-choice="theme">
+              <button data-value="light">Terang</button>
+              <button data-value="dark">Gelap</button>
+              <button data-value="system">Sistem</button>
+            </div>
+          </div>
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
+            <div class="card-text"><div class="card-title">Zoom WhatsApp</div></div>
+            <div class="stepper" data-zoom-for="wa">
+              <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            </div>
+          </div>
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--tg)" aria-hidden="true"><use href="#ico-tg"/></svg>
+            <div class="card-text"><div class="card-title">Zoom Telegram</div></div>
+            <div class="stepper" data-zoom-for="tg">
+              <button data-zoom="-1" title="Perkecil"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button><span class="val"></span><button data-zoom="1" title="Perbesar"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-title">Startup dan jendela</div>
+        <div class="cards">
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-power"/></svg></span>
+            <div class="card-text"><div class="card-title" data-text="autostart">Buka saat Windows menyala</div></div>
+            <button class="toggle" role="switch" data-setting="autostart"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-hide"/></svg></span>
+            <div class="card-text"><div class="card-title" data-text="startHidden">Mulai tersembunyi di tray</div></div>
+            <button class="toggle" role="switch" data-setting="startHidden"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-close"/></svg></span>
+            <div class="card-text"><div class="card-title">Saat jendela ditutup</div></div>
+            <div class="combo" data-choice="closeAction">
+              <button data-value="tray" data-text="keepRunning">Tetap di tray</button>
+              <button data-value="quit">Keluar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-title">Notifikasi</div>
+        <div class="cards">
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-bell"/></svg></span>
+            <div class="card-text">
+              <div class="card-title">Cara memberi tahu pesan baru</div>
+              <div class="card-sub" data-text="notifyModeSub"></div>
+            </div>
+            <div class="combo" data-choice="notifyMode">
+              <button data-value="toast">Notifikasi</button>
+              <button data-value="attention" data-text="attention">Kedip taskbar</button>
+              <button data-value="both">Keduanya</button>
+            </div>
+          </div>
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
+            <div class="card-text"><div class="card-title">WhatsApp</div></div>
+            <button class="toggle" role="switch" data-setting="notifyWa"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--tg)" aria-hidden="true"><use href="#ico-tg"/></svg>
+            <div class="card-text"><div class="card-title">Telegram</div></div>
+            <button class="toggle" role="switch" data-setting="notifyTg"><span class="state"></span><span class="track"></span></button>
+          </div>
+        </div>
+
+        <div class="group-title">Akun</div>
+        <div class="cards">
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
+            <div class="card-text"><div class="card-title">WhatsApp</div></div>
+            <button class="btn" data-action="reload:wa">Muat ulang</button>
+            <button class="btn danger" data-action="reset:wa">Keluar akun</button>
+          </div>
+          <div class="card">
+            <svg class="svc-ico" style="color:var(--tg)" aria-hidden="true"><use href="#ico-tg"/></svg>
+            <div class="card-text">
+              <div class="card-title">Telegram</div>
+            </div>
+            <div class="combo" data-choice="telegramVersion" title="Versi Telegram Web">
+              <button data-value="a">Web A</button>
+              <button data-value="k">Web K</button>
+            </div>
+            <button class="btn" data-action="reload:tg">Muat ulang</button>
+            <button class="btn danger" data-action="reset:tg">Keluar akun</button>
+          </div>
+        </div>
+
+        <div class="group-title">Pembaruan</div>
+        <div class="cards">
+          <div class="card wrap">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-update"/></svg></span>
+            <div class="card-text">
+              <div class="card-title" id="updTitle">Twincxt</div>
+              <div class="card-sub" id="updStatus"></div>
+              <div class="progress" id="updProgress" hidden><i></i></div>
+            </div>
+            <button class="btn" id="updCheck" data-update="check">Periksa pembaruan</button>
+            <button class="btn primary" id="updInstall" data-update="install" hidden>Perbarui sekarang</button>
+            <button class="btn" id="updSkip" data-update="skip" hidden>Lewati versi ini</button>
+            <div class="notes" id="updNotes"></div>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-auto"/></svg></span>
+            <div class="card-text">
+              <div class="card-title">Periksa pembaruan otomatis</div>
+              <div class="card-sub">Saat Twincxt dibuka dan setiap 6 jam. Unduhan berjalan di latar belakang; pemasangan menunggu persetujuan Anda.</div>
+            </div>
+            <button class="toggle" role="switch" data-setting="autoUpdate"><span class="state"></span><span class="track"></span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var app = document.getElementById('app');
+  var NAMES = { wa: 'WhatsApp', tg: 'Telegram' };
+  var ZOOMS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+
+  var s = {
+    platform: 'windows', version: '',
+    active: 'wa', settingsOpen: false, maximized: false,
+    theme: 'system', zoom: { wa: 100, tg: 100 }, unread: { wa: 0, tg: 0 },
+    autostart: false, startHidden: false, closeAction: 'tray',
+    notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
+    autoUpdate: true,
+    // status: idle | checking | latest | available | downloading | ready | installing | error
+    update: { status: 'idle', version: '', progress: 0, notes: '', error: '' }
+  };
+
+  // Words that differ per system.
+  var TEXT = {
+    windows: { autostart: 'Buka saat Windows menyala', startHidden: 'Mulai tersembunyi di tray', keepRunning: 'Tetap di tray',
+      attention: 'Kedip taskbar', notifyModeSub: 'Notifikasi Windows, ikon taskbar yang berkedip, atau keduanya.',
+      one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' },
+    mac: { autostart: 'Buka saat login', startHidden: 'Mulai tanpa membuka jendela', keepRunning: 'Tetap berjalan',
+      attention: 'Pantulkan Dock', notifyModeSub: 'Notifikasi macOS, ikon Dock yang memantul, atau keduanya.',
+      one: '⌘1', two: '⌘2', settings: '⌘,' },
+    linux: { autostart: 'Buka saat login', startHidden: 'Mulai tersembunyi di tray', keepRunning: 'Tetap di tray',
+      attention: 'Sorot di taskbar', notifyModeSub: 'Notifikasi desktop, jendela yang disorot di taskbar, atau keduanya.',
+      one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' }
+  };
+
+  // WebView2 (Windows) or the Electron preload (macOS, Linux).
+  var host = (window.chrome && window.chrome.webview) || window.twincxtHost || null;
+  function send(type, data) { if (host) host.postMessage(JSON.stringify({ type: type, data: data })); }
+
+  var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  function isDark() { return s.theme === 'dark' || (s.theme === 'system' && darkQuery.matches); }
+
+  function renderUpdate() {
+    var u = s.update || {};
+    var title = 'Twincxt ' + (s.version || '');
+    var status = '', canInstall = false, canSkip = false, checking = false;
+    switch (u.status) {
+      case 'checking': status = 'Memeriksa pembaruan…'; checking = true; break;
+      case 'latest': status = 'Anda memakai versi terbaru.'; break;
+      case 'available': status = 'Versi ' + u.version + ' tersedia.'; canInstall = true; canSkip = true; break;
+      case 'downloading': status = 'Mengunduh versi ' + u.version + '… ' + Math.round((u.progress || 0) * 100) + '%'; break;
+      case 'ready': status = 'Versi ' + u.version + ' siap dipasang.'; canInstall = true; canSkip = true; break;
+      case 'installing': status = 'Menutup Twincxt dan memasang versi ' + u.version + '…'; break;
+      case 'error': status = u.error || 'Pembaruan gagal.'; break;
+      default: status = '';
+    }
+    document.getElementById('updTitle').textContent = title;
+    document.getElementById('updStatus').textContent = status;
+    var p = document.getElementById('updProgress');
+    p.hidden = u.status !== 'downloading';
+    p.firstElementChild.style.width = Math.round((u.progress || 0) * 100) + '%';
+    var inst = document.getElementById('updInstall');
+    inst.hidden = !canInstall;
+    inst.textContent = u.status === 'ready' ? 'Mulai ulang & perbarui' : 'Unduh & perbarui';
+    document.getElementById('updSkip').hidden = !canSkip || !!u.required;
+    var req = document.getElementById('updRequired');
+    req.hidden = !u.required;
+    if (u.required) {
+      document.getElementById('updRequiredText').textContent = u.status === 'downloading'
+        ? 'Mengunduh versi ' + u.version + '\u2026 ' + Math.round((u.progress || 0) * 100) + '%'
+        : 'Pasang versi ' + u.version + ' untuk kembali memakai WhatsApp dan Telegram.';
+      req.querySelector('button').hidden = !canInstall;
+    }
+    var check = document.getElementById('updCheck');
+    check.disabled = checking || u.status === 'downloading' || u.status === 'installing';
+    document.getElementById('updNotes').textContent = (u.status === 'available' || u.status === 'ready' || u.status === 'downloading') ? (u.notes || '') : '';
+    document.getElementById('settingsBtn').classList.toggle('has-update', u.status === 'available' || u.status === 'ready');
+  }
+
+  function render() {
+    var t = TEXT[s.platform] || TEXT.windows;
+    root.dataset.theme = isDark() ? 'dark' : 'light';
+    root.dataset.platform = s.platform;
+    app.dataset.active = s.active;
+    app.classList.toggle('settings-open', s.settingsOpen);
+    app.classList.toggle('maximized', s.maximized);
+
+    document.querySelectorAll('[data-text]').forEach(function (el) {
+      if (t[el.dataset.text]) el.textContent = t[el.dataset.text];
+    });
+    document.querySelector('.half[data-svc="wa"]').title = 'WhatsApp (' + t.one + ')';
+    document.querySelector('.half[data-svc="tg"]').title = 'Telegram (' + t.two + ', Ctrl+Tab untuk berganti)';
+    document.getElementById('settingsBtn').title = 'Pengaturan (' + t.settings + ')';
+
+    document.querySelectorAll('.half').forEach(function (b) {
+      if (b.dataset.svc === s.active && !s.settingsOpen) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+    ['wa', 'tg'].forEach(function (k) {
+      var n = s.unread[k];
+      document.querySelector('[data-count="' + k + '"]').textContent = n > 99 ? '99+' : (n > 0 ? String(n) : '');
+    });
+
+    document.getElementById('serviceView').hidden = s.settingsOpen;
+    document.getElementById('settingsView').hidden = !s.settingsOpen;
+    document.getElementById('settingsBtn').setAttribute('aria-pressed', String(s.settingsOpen));
+    document.getElementById('maxBtn').innerHTML = s.maximized ? '&#xE923;' : '&#xE922;';
+    document.getElementById('maxBtn').title = s.maximized ? 'Restore' : 'Maximize';
+    document.getElementById('zoomVal').textContent = s.zoom[s.active] + '%';
+    var n = s.unread[s.active];
+    document.getElementById('stripCtx').textContent = s.settingsOpen ? 'Pengaturan'
+      : NAMES[s.active] + (n > 0 ? '  ·  ' + n + ' belum dibaca' : '');
+
+    document.querySelectorAll('[data-zoom-for]').forEach(function (z) {
+      z.querySelector('.val').textContent = s.zoom[z.dataset.zoomFor] + '%';
+    });
+    document.querySelectorAll('.toggle').forEach(function (b) {
+      var on = !!s[b.dataset.setting];
+      b.setAttribute('aria-checked', String(on));
+      b.querySelector('.state').textContent = on ? 'Aktif' : 'Nonaktif';
+    });
+    document.querySelectorAll('[data-choice]').forEach(function (g) {
+      g.querySelectorAll('button').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(s[g.dataset.choice] === b.dataset.value));
+      });
+    });
+    renderUpdate();
+    document.title = s.settingsOpen ? 'Pengaturan - Twincxt' : NAMES[s.active] + ' - Twincxt';
+  }
+
+  function locked() { return !!(s.update && s.update.required); }
+  function select(svc) {
+    if (locked()) { openSettings(true); return; }
+    s.active = svc; s.settingsOpen = false; render(); send('select', svc);
+  }
+  function other() { return s.active === 'wa' ? 'tg' : 'wa'; }
+  function openSettings(on) {
+    s.settingsOpen = locked() || (on === undefined ? !s.settingsOpen : on);
+    render(); send('settings', s.settingsOpen);
+  }
+  function zoom(svc, dir) {
+    var i = ZOOMS.indexOf(s.zoom[svc]); if (i < 0) i = 5;
+    var v = dir === 0 ? 100 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + dir))];
+    s.zoom[svc] = v; render(); send('zoom', { svc: svc, value: v });
+  }
+  function set(key, value) { s[key] = value; render(); send('set', { key: key, value: value }); }
+
+  document.querySelectorAll('.half').forEach(function (b) {
+    b.addEventListener('click', function () { select(b.dataset.svc); });
+  });
+  document.getElementById('settingsBtn').addEventListener('click', function () { openSettings(); });
+  document.querySelector('.zoom').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-zoom]'); if (b) zoom(s.active, +b.dataset.zoom);
+  });
+  document.querySelectorAll('[data-zoom-for]').forEach(function (z) {
+    z.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-zoom]'); if (b) zoom(z.dataset.zoomFor, +b.dataset.zoom);
+    });
+  });
+  document.querySelectorAll('.toggle').forEach(function (b) {
+    b.addEventListener('click', function () { set(b.dataset.setting, !s[b.dataset.setting]); });
+  });
+  document.querySelectorAll('[data-choice]').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (b) set(g.dataset.choice, b.dataset.value);
+    });
+  });
+  document.querySelectorAll('[data-update]').forEach(function (b) {
+    b.addEventListener('click', function () { send('update', b.dataset.update); });
+  });
+  // "Keluar akun" needs a second click within 4 s; the label says what the second click does.
+  document.querySelectorAll('[data-action]').forEach(function (b) {
+    var label = b.textContent, timer = null;
+    b.addEventListener('click', function () {
+      if (b.classList.contains('danger') && !b.classList.contains('armed')) {
+        b.classList.add('armed');
+        b.textContent = 'Klik lagi untuk keluar';
+        timer = setTimeout(function () { b.classList.remove('armed'); b.textContent = label; }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      b.classList.remove('armed');
+      send('action', b.dataset.action);
+      b.disabled = true;
+      b.textContent = b.classList.contains('danger') ? 'Keluar…' : 'Memuat ulang…';
+      setTimeout(function () { b.disabled = false; b.textContent = label; }, 2500);
+    });
+  });
+  document.getElementById('topResize').addEventListener('mousedown', function (e) {
+    if (e.button === 0) send('window', 'resizeTop');
+  });
+  document.querySelectorAll('[data-win]').forEach(function (b) {
+    b.addEventListener('click', function () { send('window', b.dataset.win); });
+  });
+  // Windows (WebView2): dragging is done by the host. Electron uses CSS drag regions.
+  document.querySelectorAll('.drag-area').forEach(function (d) {
+    d.addEventListener('mousedown', function (e) {
+      if (e.button === 0 && e.detail === 1 && !e.target.closest('button')) send('window', 'drag');
+    });
+    d.addEventListener('dblclick', function (e) { if (!e.target.closest('button')) send('window', 'max'); });
+  });
+  document.addEventListener('keydown', function (e) {
+    var mod = s.platform === 'mac' ? e.metaKey : e.altKey;
+    if (e.ctrlKey && e.key === 'Tab') { select(other()); e.preventDefault(); }
+    else if (mod && !e.ctrlKey && e.key === '1') { select('wa'); e.preventDefault(); }
+    else if (mod && !e.ctrlKey && e.key === '2') { select('tg'); e.preventDefault(); }
+    else if ((s.platform === 'mac' ? e.metaKey : e.ctrlKey) && e.key === ',') { openSettings(); e.preventDefault(); }
+    else if (e.key === 'Escape' && s.settingsOpen) { openSettings(false); }
+  });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  darkQuery.addEventListener('change', render);
+
+  // API used by the native host.
+  window.twincxt = {
+    state: function (patch) { Object.assign(s, patch); render(); },
+    unread: function (svc, n) { s.unread[svc] = n; render(); },
+    update: function (u) { s.update = u; renderUpdate(); },
+    loading: function (svc, on) { document.querySelector('.half[data-svc="' + svc + '"]').classList.toggle('loading', on); },
+    strip: function (bg, fg) {
+      var st = document.getElementById('strip');
+      st.style.background = bg || ''; st.style.color = fg || '';
+      document.querySelector('.content').style.background = bg || '';
+    }
+  };
+
+  if (host) {
+    send('ready', { dark: darkQuery.matches });
+  } else {
+    // Design preview in a normal browser: #dark #settings #tg #mac #linux #update
+    var h = location.hash;
+    s.unread = { wa: 13, tg: 4 };
+    s.version = '1.2.0';
+    if (h.indexOf('dark') >= 0) s.theme = 'dark';
+    if (h.indexOf('settings') >= 0) s.settingsOpen = true;
+    if (h.indexOf('tg') >= 0) s.active = 'tg';
+    if (h.indexOf('mac') >= 0) s.platform = 'mac';
+    if (h.indexOf('linux') >= 0) s.platform = 'linux';
+    if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Contoh catatan rilis\n- Perbaikan kecil' };
+    if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Contoh', required: true };
+    s.autostart = true;
+    var fill = document.createElement('div');
+    fill.className = 'preview-fill';
+    fill.textContent = 'webview';
+    document.getElementById('serviceView').appendChild(fill);
+  }
+
+  root.classList.add('no-anim');
+  render();
+  requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove('no-anim'); }); });
+})();
+</script>
+</body>
+</html>

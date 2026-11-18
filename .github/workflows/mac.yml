@@ -1,0 +1,113 @@
+name: macOS app
+
+# Builds Twincxt for macOS on GitHub's Mac: a .dmg (to install) and a .zip
+# (used by the built-in updater) for Apple Silicon and for Intel. On a version
+# tag the files are attached to that release; the Windows installer is added
+# from the owner's PC.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Attach the files to this release (a version tag, e.g. v1.2.0); empty: don't"
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac:
+    name: Build .dmg and .zip (Apple Silicon and Intel)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          v="v$(node -p "require('./desktop/package.json').version")"
+          [ "$v" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json is $v but the tag is $GITHUB_REF_NAME"; exit 1; }
+
+      - name: Install
+        working-directory: desktop
+        run: npm ci --no-audit --no-fund
+
+      # No Apple Developer ID: electron-builder does not sign; scripts/after-pack.js
+      # gives the app an ad-hoc signature so Apple Silicon does not call it damaged.
+      - name: Build
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:mac
+
+      - name: Look at the apps
+        run: |
+          for app in desktop/dist/mac*/Twincxt.app; do
+            echo "== $app"
+            codesign --verify --deep --strict "$app" && echo "signature ok"
+            lipo -info "$app/Contents/MacOS/Twincxt"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist"
+            /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
+          done
+          ls -la desktop/dist
+
+      - name: Start it
+        run: |
+          app=$(ls -d desktop/dist/mac-arm64/Twincxt.app)
+          export TWINCXT_SMOKE=35 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-data"
+          "$app/Contents/MacOS/Twincxt" > app.log 2>&1 &
+          sleep 25
+          screencapture -x mac-window.png || true
+          wait || true
+          echo "--- app output"; tail -n 40 app.log || true
+          echo "--- debug log"; cat "$RUNNER_TEMP/twincxt-data/debug.log" || true
+
+      - name: Checksums
+        run: |
+          cd desktop/dist
+          shasum -a 256 Twincxt-*.dmg Twincxt-*.zip > SHA256SUMS-mac.txt
+          cat SHA256SUMS-mac.txt
+
+      - name: Upload the files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Twincxt-macOS
+          path: |
+            desktop/dist/Twincxt-*.dmg
+            desktop/dist/Twincxt-*.zip
+            desktop/dist/SHA256SUMS-mac.txt
+          if-no-files-found: error
+
+      - name: Upload the check
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Twincxt-macOS-check
+          path: |
+            mac-window.png
+            app.log
+          if-no-files-found: ignore
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          tag="${RELEASE:-$GITHUB_REF_NAME}"
+          case "$tag" in v[0-9]*) ;; *) echo "Not a version tag: $tag"; exit 1 ;; esac
+          gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "Twincxt ${tag#v}" --notes "" || true
+          gh release upload "$tag" desktop/dist/Twincxt-*.dmg desktop/dist/Twincxt-*.zip desktop/dist/SHA256SUMS-mac.txt -R "$GITHUB_REPOSITORY" --clobber

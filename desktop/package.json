@@ -1,0 +1,91 @@
+{
+  "name": "twincxt",
+  "productName": "Twincxt",
+  "version": "1.2.0",
+  "description": "WhatsApp Web and Telegram Web in one window",
+  "homepage": "https://github.com/rashiiddsr/twincxt",
+  "author": {
+    "name": "Twincxt",
+    "email": "rashiiddsr@users.noreply.github.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "prepare-ui": "node scripts/copy-ui.js",
+    "start": "npm run prepare-ui && electron .",
+    "dist:mac": "npm run prepare-ui && electron-builder --mac --arm64 --x64 --publish never",
+    "dist:linux": "npm run prepare-ui && electron-builder --linux --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "app.twincxt.desktop",
+    "productName": "Twincxt",
+    "copyright": "Twincxt. Not affiliated with WhatsApp, Meta or Telegram.",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "updater.js",
+      "preload-shell.js",
+      "preload-service.js",
+      "ui/**",
+      "package.json"
+    ],
+    "asar": true,
+    "afterPack": "scripts/after-pack.js",
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "icon": "build/icon.png",
+      "target": [
+        { "target": "dmg" },
+        { "target": "zip" }
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true,
+      "artifactName": "Twincxt-${version}-mac-${arch}.${ext}",
+      "extendInfo": {
+        "NSCameraUsageDescription": "WhatsApp and Telegram use the camera for video calls.",
+        "NSMicrophoneUsageDescription": "WhatsApp and Telegram use the microphone for calls and voice messages.",
+        "LSApplicationCategoryType": "public.app-category.social-networking"
+      }
+    },
+    "dmg": {
+      "title": "Twincxt ${version}",
+      "contents": [
+        { "x": 150, "y": 190 },
+        { "x": 390, "y": 190, "type": "link", "path": "/Applications" }
+      ],
+      "window": { "width": 540, "height": 380 }
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Network",
+      "executableName": "twincxt",
+      "synopsis": "WhatsApp and Telegram in one window",
+      "description": "Twincxt keeps WhatsApp Web and Telegram Web side by side in one window.",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "artifactName": "Twincxt-${version}-linux-${arch}.${ext}",
+      "desktop": {
+        "Name": "Twincxt",
+        "Comment": "WhatsApp and Telegram in one window",
+        "Categories": "Network;InstantMessaging;Chat;",
+        "StartupWMClass": "Twincxt"
+      }
+    },
+    "deb": {
+      "packageName": "twincxt",
+      "priority": "optional"
+    }
+  }
+}
