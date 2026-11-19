@@ -790,7 +790,7 @@ func (a *app) applyStrip() {
 		return
 	}
 	s := a.svc(a.cfg.Active)
-	if a.settings || s == nil || s.strip == nil {
+	if a.settings || a.appLocked || s == nil || s.strip == nil {
 		a.shell.Eval("twincxt.strip('', '')")
 		return
 	}
