@@ -440,7 +440,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   func applyStrip() {
     guard let s = services[cfg.active] else { return }
-    guard !settingsOpen, let c = s.strip, c.count == 3 else { shellEval("twincxt.strip('', '')"); return }
+    guard !settingsOpen, !appLocked, let c = s.strip, c.count == 3 else { shellEval("twincxt.strip('', '')"); return }
     let dark = (0.299 * Double(c[0]) + 0.587 * Double(c[1]) + 0.114 * Double(c[2])) / 255 < 0.5
     shellEval("twincxt.strip(\(json("rgb(\(c[0]),\(c[1]),\(c[2]))")),\(json(dark ? "#D1D7DB" : "#3B4A54")))")
   }
