@@ -1958,6 +1958,15 @@ static void create_window(gboolean autostarted) {
     gtk_window_present(GTK_WINDOW(win));
   }
   focus_active();
+  tw_log("window created (%s)", app_locked ? "locked" : "unlocked");
+}
+
+static gboolean debug_probe(gpointer d) {
+  tw_log("probe: shell %s loading=%d progress=%.2f mapped=%d; wa %s loading=%d; tg %s loading=%d", webkit_web_view_get_uri(shell),
+         webkit_web_view_is_loading(shell), webkit_web_view_get_estimated_load_progress(shell), gtk_widget_get_mapped(GTK_WIDGET(shell)),
+         webkit_web_view_get_uri(svcs[0].view), webkit_web_view_is_loading(svcs[0].view), webkit_web_view_get_uri(svcs[1].view),
+         webkit_web_view_is_loading(svcs[1].view));
+  return G_SOURCE_REMOVE;
 }
 
 static void act_select(GSimpleAction *a, GVariant *p, gpointer d) {
@@ -2037,7 +2046,10 @@ static void start(gboolean autostarted) {
   updater_init();
   updater_start();
   const char *smoke = g_getenv("TWINCXT_SMOKE");
-  if (smoke && atoi(smoke) > 0) g_timeout_add_seconds((guint)atoi(smoke), smoke_next, NULL);
+  if (smoke && atoi(smoke) > 0) {
+    g_timeout_add_seconds((guint)atoi(smoke), smoke_next, NULL);
+    g_timeout_add_seconds(5, debug_probe, NULL);
+  }
 }
 
 static int on_command_line(GApplication *a, GApplicationCommandLine *cl, gpointer d) {

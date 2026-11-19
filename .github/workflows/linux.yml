@@ -114,6 +114,14 @@ jobs:
 
       - name: App lock (starts locked with PIN 1234, tries 0000, then 1234)
         run: |
+          # Control: the same start with a written config and no lock.
+          ctl="$RUNNER_TEMP/twincxt-ctl"
+          mkdir -p "$ctl"
+          echo '{"lockEnabled": false, "lockAfter": 5}' > "$ctl/config.json"
+          TWINCXT_SMOKE=12 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$ctl" TWINCXT_UPDATE_DELAY=600 \
+            timeout 90 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- twincxt > check/control.log 2>&1 || true
+          grep -v '"type":"frame"' "$ctl/debug.log" > check/control-debug.log || true
+          head -n 14 check/control-debug.log
           data="$RUNNER_TEMP/twincxt-lock"
           mkdir -p "$data"
           echo '{"lockEnabled": true, "lockAfter": 5,
