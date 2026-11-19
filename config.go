@@ -34,6 +34,12 @@ type config struct {
 	BlurNames       bool        `json:"blurNames"`
 	BlurPhotos      bool        `json:"blurPhotos"`
 	BlurMedia       bool        `json:"blurMedia"`
+	LockEnabled     bool        `json:"lockEnabled"`
+	LockHash        string      `json:"lockHash"`  // PBKDF2-HMAC-SHA256 of the PIN, hex
+	LockSalt        string      `json:"lockSalt"`  // hex
+	LockAfter       int         `json:"lockAfter"` // minutes in the background; 0 = only on start
+	LockFails       int         `json:"lockFails"`
+	LockUntil       int64       `json:"lockUntil"` // unix seconds; no tries before this
 	Window          windowState `json:"window"`
 }
 
@@ -49,6 +55,7 @@ func defaultConfig() config {
 		TelegramVersion: "a",
 		NotifyMode:      "toast",
 		AutoUpdate:      true,
+		LockAfter:       5,
 	}
 }
 
@@ -78,6 +85,12 @@ func loadConfig() config {
 	}
 	if c.CloseAction != "quit" {
 		c.CloseAction = "tray"
+	}
+	if c.LockAfter != 0 && c.LockAfter != 1 && c.LockAfter != 5 && c.LockAfter != 15 {
+		c.LockAfter = 5
+	}
+	if c.LockEnabled && c.LockHash == "" {
+		c.LockEnabled = false
 	}
 	if c.NotifyMode != "attention" && c.NotifyMode != "both" {
 		c.NotifyMode = "toast"

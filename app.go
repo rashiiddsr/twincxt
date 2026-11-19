@@ -110,6 +110,8 @@ type app struct {
 	popups         map[uintptr]*popup
 	upd            *updater
 	locked         bool // a required update must be installed first
+	appLocked      bool // the app lock screen is showing (applock.go)
+	awaySince      time.Time
 	spare          *spareWindow
 	sparePending   bool
 	popupTested    bool
@@ -209,6 +211,7 @@ func (a *app) createWindow() {
 	for _, s := range []*service{a.svcs["wa"], a.svcs["tg"]} {
 		s.host = a.createHost()
 	}
+	a.startLock()
 	a.layout()
 	interval := time.Minute
 	if warmFor < interval {
@@ -262,7 +265,7 @@ func (a *app) layout() {
 			r = cr
 		}
 		pMoveWindow.Call(s.host, uintptr(r.Left), uintptr(r.Top), uintptr(r.w()), uintptr(r.h()), 1)
-		onTop := !a.settings && (id == a.cfg.Active || a.fullSvc == id)
+		onTop := !a.settings && !a.appLocked && (id == a.cfg.Active || a.fullSvc == id)
 		if onTop {
 			s.leftAt = time.Time{}
 			a.setCold(s, false)
@@ -387,6 +390,9 @@ func mainWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		}
 		return 1
 	case WM_ACTIVATE:
+		if a != nil {
+			a.onActivate(loword(wp) != 0)
+		}
 		if loword(wp) != 0 && a != nil {
 			a.focusActive()
 		}
@@ -419,6 +425,9 @@ func mainWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 	case WM_TIMER:
 		if a != nil && wp == sweepTimer {
 			a.sweep()
+		}
+		if a != nil && wp == lockTimer {
+			a.onLockTimer()
 		}
 		if a != nil && wp == updateTimer {
 			a.upd.onTimer()
@@ -504,7 +513,7 @@ func (a *app) notifyMoved() {
 }
 
 func (a *app) focusActive() {
-	if a.settings {
+	if a.settings || a.appLocked {
 		if a.shell != nil {
 			a.shell.Focus()
 		}
@@ -678,6 +687,8 @@ func (a *app) onShellMessage(raw string) {
 		}
 		_ = json.Unmarshal(m.Data, &kv)
 		a.setOption(kv.Key, kv.Value)
+	case "lock":
+		a.onLockMessage(m.Data)
 	case "action":
 		a.runAction(str())
 	case "window":
@@ -738,6 +749,9 @@ func (a *app) pushState() {
 		"blurNames":       a.cfg.BlurNames,
 		"blurPhotos":      a.cfg.BlurPhotos,
 		"blurMedia":       a.cfg.BlurMedia,
+		"lockEnabled":     a.cfg.LockEnabled,
+		"locked":          a.appLocked,
+		"lockAfter":       a.cfg.LockAfter,
 		"platform":        "windows",
 		"version":         appVersion,
 		"maximized":       isZoomed(a.hwnd),
@@ -859,6 +873,14 @@ func (a *app) setOption(key string, raw json.RawMessage) {
 		}
 		for _, s := range []*service{a.svc("wa"), a.svc("tg")} {
 			a.pushPrivacy(s)
+		}
+	case "lockAfter":
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			_ = json.Unmarshal(raw, &n)
+		}
+		if n == 0 || n == 1 || n == 5 || n == 15 {
+			a.cfg.LockAfter = n
 		}
 	case "notifyWa":
 		a.cfg.NotifyWA = b
@@ -1133,6 +1155,10 @@ func (a *app) notify(s *service, title, body string) {
 	if title == "" {
 		title = s.name
 	}
+	if a.appLocked {
+		// Locked: say that something arrived, not what.
+		title, body = s.name, "New message"
+	}
 	t := toast{
 		Title:  title,
 		Body:   body,
@@ -1154,6 +1180,13 @@ func (a *app) notify(s *service, title, body string) {
 // handleShortcut implements app shortcuts while any WebView has focus.
 func (a *app) handleShortcut(vk uint32) bool {
 	ctrl, alt, shift := keyDown(VK_CONTROL), keyDown(VK_MENU), keyDown(VK_SHIFT)
+	if ctrl && !alt && !shift && vk == 'L' {
+		a.lockNow()
+		return true
+	}
+	if a.appLocked {
+		return (alt && (vk == '1' || vk == '2')) || (ctrl && (vk == VK_TAB || vk == VK_OEM_COMMA))
+	}
 	switch {
 	case alt && !ctrl && vk == '1':
 		a.selectService("wa", "Alt+1")
@@ -1371,6 +1404,7 @@ func (a *app) trayMenu() {
 		cmdTG
 		cmdSettings
 		cmdQuit
+		cmdLock
 	)
 	menu, _, _ := pCreatePopupMenu.Call()
 	label := func(name string, n int) string {
@@ -1384,6 +1418,9 @@ func (a *app) trayMenu() {
 	pAppendMenu.Call(menu, MF_STRING, cmdWA, utf16ptr(label("WhatsApp", a.svcs["wa"].unread)))
 	pAppendMenu.Call(menu, MF_STRING, cmdTG, utf16ptr(label("Telegram", a.svcs["tg"].unread)))
 	pAppendMenu.Call(menu, MF_SEPARATOR, 0, 0)
+	if a.cfg.LockEnabled && !a.appLocked {
+		pAppendMenu.Call(menu, MF_STRING, cmdLock, utf16ptr("Lock"))
+	}
 	pAppendMenu.Call(menu, MF_STRING, cmdSettings, utf16ptr("Settings"))
 	pAppendMenu.Call(menu, MF_STRING, cmdQuit, utf16ptr("Quit"))
 	var pt point
@@ -1407,6 +1444,8 @@ func (a *app) trayMenu() {
 		a.pushState()
 		a.applyStrip()
 		a.showWindow()
+	case cmdLock:
+		a.lockNow()
 	case cmdQuit:
 		a.quit()
 	}
