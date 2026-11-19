@@ -95,4 +95,9 @@ Debugging: `TWINCXT_DEBUG=1` writes `debug.log` in the data folder.
   config in `package.json`).
 - Cloud builds: `.github/workflows/mac.yml`, `.github/workflows/linux.yml`.
 
+## Credits
+
+Twincxt grew out of [whatsapp-web.view](https://github.com/Adytm404/whatsapp-web.view)
+by Adytm404, a lightweight Go + WebView2 wrapper for WhatsApp Web on Windows.
+
 Not affiliated with WhatsApp, Meta or Telegram.
