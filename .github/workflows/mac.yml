@@ -1,9 +1,10 @@
 name: macOS app
 
-# Builds Twincxt for macOS on GitHub's Mac: a .dmg (to install) and a .zip
-# (used by the built-in updater) for Apple Silicon and for Intel. On a version
-# tag the files are attached to that release; the Windows installer is added
-# from the owner's PC.
+# Builds the native Twincxt for macOS (Swift, AppKit, WKWebView; macos/) on
+# GitHub's Mac: one universal app for Apple Silicon and Intel, as a .dmg (to
+# install) and a .zip (used by the built-in updater). On a version tag the
+# files are attached to that release; the Windows installer is added from the
+# owner's PC.
 on:
   workflow_dispatch:
     inputs:
@@ -23,61 +24,59 @@ concurrency:
 
 jobs:
   mac:
-    name: Build .dmg and .zip (Apple Silicon and Intel)
+    name: Build .dmg and .zip (universal)
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
 
       - name: Version matches the tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          v="v$(node -p "require('./desktop/package.json').version")"
-          [ "$v" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json is $v but the tag is $GITHUB_REF_NAME"; exit 1; }
+          v="v$(tr -d '[:space:]' < VERSION)"
+          [ "$v" = "$GITHUB_REF_NAME" ] || { echo "VERSION is $v but the tag is $GITHUB_REF_NAME"; exit 1; }
 
-      - name: Install
-        working-directory: desktop
-        run: npm ci --no-audit --no-fund
-
-      # No Apple Developer ID: electron-builder does not sign; scripts/after-pack.js
-      # gives the app an ad-hoc signature so Apple Silicon does not call it damaged.
       - name: Build
-        working-directory: desktop
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run dist:mac
-
-      - name: Look at the apps
         run: |
-          for app in desktop/dist/mac*/Twincxt.app; do
-            echo "== $app"
-            codesign --verify --deep --strict "$app" && echo "signature ok"
-            lipo -info "$app/Contents/MacOS/Twincxt"
-            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist"
-            /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
-          done
-          ls -la desktop/dist
+          xcrun swiftc --version
+          bash macos/build.sh
+
+      # Twincxt 1.2.0 (Electron) updates itself from ...-mac-arm64.zip or
+      # ...-mac-x64.zip; the universal zip under those names moves it to this app.
+      - name: Files for older versions' updater
+        run: |
+          cd build/mac
+          v="$(tr -d '[:space:]' < ../../VERSION)"
+          cp "Twincxt-$v-mac.zip" "Twincxt-$v-mac-arm64.zip"
+          cp "Twincxt-$v-mac.zip" "Twincxt-$v-mac-x64.zip"
+
+      - name: Look at the app
+        run: |
+          app=build/mac/Twincxt.app
+          codesign --verify --deep --strict "$app" && echo "signature ok"
+          lipo -info "$app/Contents/MacOS/Twincxt"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
+          du -sh "$app"
+          ls -la build/mac
 
       - name: Start it
         run: |
-          app=$(ls -d desktop/dist/mac-arm64/Twincxt.app)
-          export TWINCXT_SMOKE=35 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-data"
+          app=build/mac/Twincxt.app
+          export TWINCXT_SMOKE=40 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-data"
+          export TWINCXT_SMOKE_SHOT="$PWD/mac-window.png"
           "$app/Contents/MacOS/Twincxt" > app.log 2>&1 &
-          sleep 25
-          screencapture -x mac-window.png || true
-          wait || true
-          echo "--- app output"; tail -n 40 app.log || true
-          echo "--- debug log"; cat "$RUNNER_TEMP/twincxt-data/debug.log" || true
+          pid=$!
+          sleep 30
+          screencapture -x mac-screen.png || true
+          for i in $(seq 1 60); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+          kill $pid 2>/dev/null || true
+          echo "--- app output"; tail -n 80 app.log || true
+          ls -la mac-*.png || true
 
       - name: Checksums
         run: |
-          cd desktop/dist
+          cd build/mac
           shasum -a 256 Twincxt-*.dmg Twincxt-*.zip > SHA256SUMS-mac.txt
           cat SHA256SUMS-mac.txt
 
@@ -86,9 +85,9 @@ jobs:
         with:
           name: Twincxt-macOS
           path: |
-            desktop/dist/Twincxt-*.dmg
-            desktop/dist/Twincxt-*.zip
-            desktop/dist/SHA256SUMS-mac.txt
+            build/mac/Twincxt-*.dmg
+            build/mac/Twincxt-*.zip
+            build/mac/SHA256SUMS-mac.txt
           if-no-files-found: error
 
       - name: Upload the check
@@ -97,7 +96,7 @@ jobs:
         with:
           name: Twincxt-macOS-check
           path: |
-            mac-window.png
+            mac-*.png
             app.log
           if-no-files-found: ignore
 
@@ -110,4 +109,4 @@ jobs:
           tag="${RELEASE:-$GITHUB_REF_NAME}"
           case "$tag" in v[0-9]*) ;; *) echo "Not a version tag: $tag"; exit 1 ;; esac
           gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "Twincxt ${tag#v}" --notes "" || true
-          gh release upload "$tag" desktop/dist/Twincxt-*.dmg desktop/dist/Twincxt-*.zip desktop/dist/SHA256SUMS-mac.txt -R "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$tag" build/mac/Twincxt-*.dmg build/mac/Twincxt-*.zip build/mac/SHA256SUMS-mac.txt -R "$GITHUB_REPOSITORY" --clobber
