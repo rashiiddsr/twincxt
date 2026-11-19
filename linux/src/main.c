@@ -1406,6 +1406,7 @@ static void on_title(WebKitWebView *v, GParamSpec *ps, Svc *s) {
 
 static void on_load(WebKitWebView *v, WebKitLoadEvent e, Svc *s) {
   if (e == WEBKIT_LOAD_STARTED) {
+    tw_log("%s: loading %.120s", s->id, webkit_web_view_get_uri(v));
     if (trusted(webkit_web_view_get_uri(v))) {
       s->ready = FALSE;
       push_loading(s, TRUE);
@@ -1859,6 +1860,23 @@ static void create_shell(void) {
   g_free(file);
 }
 
+static void on_shell_load(WebKitWebView *v, WebKitLoadEvent e, gpointer d) {
+  static const char *names[] = {"started", "redirected", "committed", "finished"};
+  tw_log("shell: load %s", names[CLAMP((int)e, 0, 3)]);
+}
+
+static gboolean on_shell_failed(WebKitWebView *v, WebKitLoadEvent e, const char *uri, GError *err, gpointer d) {
+  tw_log("shell: load failed: %s", err ? err->message : "");
+  return FALSE;
+}
+
+// The shell's page crashed: load it again (it asks for its state on "ready").
+static void on_shell_crashed(WebKitWebView *v, WebKitWebProcessTerminationReason reason, gpointer d) {
+  tw_log("shell: web process gone (%d)", reason);
+  shell_ready = FALSE;
+  if (reason != WEBKIT_WEB_PROCESS_TERMINATED_BY_API) webkit_web_view_reload(v);
+}
+
 static gboolean on_shell_decide(WebKitWebView *v, WebKitPolicyDecision *d, WebKitPolicyDecisionType t, gpointer data) {
   if (t != WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
     WebKitNavigationAction *a = webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(d));
@@ -1912,6 +1930,9 @@ static void create_window(gboolean autostarted) {
   gtk_container_add(GTK_CONTAINER(win), overlay);
   create_shell();
   g_signal_connect(shell, "decide-policy", G_CALLBACK(on_shell_decide), NULL);
+  g_signal_connect(shell, "load-changed", G_CALLBACK(on_shell_load), NULL);
+  g_signal_connect(shell, "load-failed", G_CALLBACK(on_shell_failed), NULL);
+  g_signal_connect(shell, "web-process-terminated", G_CALLBACK(on_shell_crashed), NULL);
   gtk_container_add(GTK_CONTAINER(overlay), GTK_WIDGET(shell));
   for (int i = 0; i < 2; i++) create_service(&svcs[i]);
   apply_theme();

@@ -123,6 +123,7 @@ jobs:
             TWINCXT_SMOKE_SHOT="$PWD/check/lock.png" TWINCXT_UPDATE_DELAY=600
           timeout 120 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- twincxt > check/lock.log 2>&1 || echo "exit code $?"
           grep '^SMOKE lock' check/lock.log || true
+          grep -v '"type":"frame"' "$data/debug.log" > check/lock-full-debug.log || true
           grep 'lock:' "$data/debug.log" | tee check/lock-debug.log
           grep -q 'lock: unlock refused: Wrong PIN.' check/lock-debug.log
           grep -q 'lock: unlock ok' check/lock-debug.log
