@@ -34,6 +34,11 @@ typedef struct {
   gboolean blur[NBLUR];
   int wx, wy, ww, wh;
   gboolean wmax;
+  // App lock: PBKDF2 hash and salt of the PIN (applock.c), hex.
+  gboolean lockEnabled;
+  char *lockHash, *lockSalt;
+  int lockAfter, lockFails;  // minutes in the background (0 = only on start); wrong tries in a row
+  gint64 lockUntil;          // unix seconds; no tries before this
 } Config;
 
 static Config cfg;
@@ -84,6 +89,12 @@ static void cfg_defaults(void) {
   cfg.ww = 1240;
   cfg.wh = 800;
   cfg.wmax = FALSE;
+  cfg.lockEnabled = FALSE;
+  str_set(&cfg.lockHash, "");
+  str_set(&cfg.lockSalt, "");
+  cfg.lockAfter = 5;
+  cfg.lockFails = 0;
+  cfg.lockUntil = 0;
 }
 
 static void load_config(void) {
@@ -115,6 +126,14 @@ static void load_config(void) {
   cfg.notifyTg = jbool(o, "notifyTg", cfg.notifyTg);
   cfg.autoUpdate = jbool(o, "autoUpdate", cfg.autoUpdate);
   for (int i = 0; i < NBLUR; i++) cfg.blur[i] = jbool(o, BLUR_KEYS[i], FALSE);
+  cfg.lockEnabled = jbool(o, "lockEnabled", FALSE);
+  if ((s = jstr(o, "lockHash"))) { str_set(&cfg.lockHash, s); g_free(s); }
+  if ((s = jstr(o, "lockSalt"))) { str_set(&cfg.lockSalt, s); g_free(s); }
+  int la = (int)jnum(o, "lockAfter", 5);
+  cfg.lockAfter = (la == 0 || la == 1 || la == 5 || la == 15) ? la : 5;
+  cfg.lockFails = (int)jnum(o, "lockFails", 0);
+  cfg.lockUntil = (gint64)jnum(o, "lockUntil", 0);
+  if (cfg.lockEnabled && !*cfg.lockHash) cfg.lockEnabled = FALSE;
   JSCValue *w = jobj(o, "window");
   if (w) {
     cfg.wx = (int)jnum(w, "x", 0);
@@ -150,6 +169,12 @@ static void save_config(void) {
   kv_bool(g, "autoUpdate", cfg.autoUpdate);
   kv_str(g, "skippedVersion", cfg.skippedVersion);
   for (int i = 0; i < NBLUR; i++) kv_bool(g, BLUR_KEYS[i], cfg.blur[i]);
+  kv_bool(g, "lockEnabled", cfg.lockEnabled);
+  kv_str(g, "lockHash", cfg.lockHash);
+  kv_str(g, "lockSalt", cfg.lockSalt);
+  kv_int(g, "lockAfter", cfg.lockAfter);
+  kv_int(g, "lockFails", cfg.lockFails);
+  g_string_append_printf(g, ",\n  \"lockUntil\": %" G_GINT64_FORMAT, cfg.lockUntil);
   g_string_append_printf(g, ",\n  \"window\": {\n    \"x\": %d,\n    \"y\": %d,\n    \"w\": %d,\n    \"h\": %d,\n    \"maximized\": %s\n  }\n}\n",
                          cfg.wx, cfg.wy, cfg.ww, cfg.wh, cfg.wmax ? "true" : "false");
   GError *err = NULL;
@@ -202,6 +227,8 @@ static GtkWidget *win, *overlay;
 static WebKitWebView *shell;
 static WebKitWebContext *wctx;
 static WebKitSettings *svc_settings;
+static gboolean app_locked;  // the app lock screen is showing
+static gint64 away_since;    // monotonic time Twincxt went to the background, 0: in front
 static gboolean shell_ready, settings_open, locked, quitting, maximized, fullscreen, iconified, started;
 static Svc *full_svc;
 static GdkEvent *last_press;
@@ -319,6 +346,9 @@ static void push_state(void) {
   S("telegramVersion", cfg.telegramVersion);
   B("autoUpdate", cfg.autoUpdate);
   for (int i = 0; i < NBLUR; i++) g_string_append_printf(g, ",\"%s\":%s", BLUR_KEYS[i], cfg.blur[i] ? "true" : "false");
+  B("lockEnabled", cfg.lockEnabled);
+  B("locked", app_locked);
+  g_string_append_printf(g, ",\"lockAfter\":%d", cfg.lockAfter);
   B("maximized", maximized);
   B("settingsOpen", settings_open);
   S("decorationLayout", decoration_layout ? decoration_layout : "menu:close");
@@ -392,16 +422,16 @@ static void layout(void) {
     Svc *s = &svcs[i];
     if (!s->view) continue;
     GtkWidget *w = GTK_WIDGET(s->view);
-    gboolean full = full_svc == s;
+    gboolean full = full_svc == s && !app_locked;
     gtk_widget_set_margin_start(w, full ? 0 : SIDE_W);
     gtk_widget_set_margin_top(w, full ? 0 : STRIP_H);
-    gboolean visible = full || (!full_svc && !settings_open && s == active_svc());
+    gboolean visible = full || (!full_svc && !settings_open && !app_locked && s == active_svc());
     gtk_widget_set_visible(w, visible);
   }
 }
 
 static void focus_active(void) {
-  if (settings_open || !active_svc()->view) {
+  if (settings_open || app_locked || !active_svc()->view) {
     if (shell) gtk_widget_grab_focus(GTK_WIDGET(shell));
     return;
   }
@@ -538,8 +568,11 @@ static gboolean on_configure(GtkWidget *w, GdkEvent *e, gpointer d) {
   return FALSE;
 }
 
+static void check_away(void);
 static gboolean on_focus_in(GtkWidget *w, GdkEvent *e, gpointer d) {
   gtk_window_set_urgency_hint(GTK_WINDOW(win), FALSE);
+  check_away();  // locks before you see the chats if you were away long enough
+  away_since = 0;
   return FALSE;
 }
 
@@ -678,6 +711,11 @@ static void set_option(const char *key, JSCValue *value) {
   } else if (!strcmp(key, "autoUpdate")) {
     cfg.autoUpdate = b;
     if (b) updater_check(FALSE);
+  } else if (!strcmp(key, "lockAfter")) {
+    int n = -1;
+    if (str && g_ascii_isdigit(str[0])) n = atoi(str);
+    else if (value && jsc_value_is_number(value)) n = jsc_value_to_int32(value);
+    if (n == 0 || n == 1 || n == 5 || n == 15) cfg.lockAfter = n;
   } else if (!strcmp(key, "telegramVersion")) {
     if (one_of(str, "a", "k", NULL) && strcmp(str, cfg.telegramVersion)) {
       str_set(&cfg.telegramVersion, str);
@@ -749,6 +787,197 @@ static void run_action(const char *action) {
   g_strfreev(parts);
 }
 
+// ---- app lock (applock.go on Windows) ---------------------------------------------------------
+//
+// The PIN (4 to 8 digits) is never stored, only its PBKDF2 hash. Twincxt locks
+// when it starts, on the lock button / Ctrl+L / the tray's Lock, and after it
+// has been in the background for lockAfter minutes (0 = only on start). After 5
+// wrong PINs in a row each try waits 30 s, doubling up to 5 minutes; the count
+// survives restarts. "Forgot PIN?" signs out of both services and removes the
+// PIN. This keeps people at your desk out of your chats; it does not encrypt
+// the data on disk.
+
+#define FREE_TRIES 5
+#define FIRST_WAIT_S 30
+#define MAX_WAIT_S 300
+
+static void update_tray_lock(void) { tray_set_lock(cfg.lockEnabled && !app_locked); }
+
+void app_lock_now(void) {
+  if (!cfg.lockEnabled || app_locked) return;
+  tw_log("lock: locked");
+  app_locked = TRUE;
+  layout();
+  push_state();
+  apply_strip();
+  focus_active();
+  update_tray_lock();
+}
+
+static void unlock_app(void) {
+  app_locked = FALSE;
+  away_since = 0;
+  tw_log("lock: unlocked");
+  layout();
+  push_state();
+  apply_strip();
+  focus_active();
+  update_tray_lock();
+}
+
+static void check_away(void) {
+  if (!cfg.lockEnabled || app_locked || cfg.lockAfter <= 0 || !away_since) return;
+  if (g_get_monotonic_time() - away_since >= (gint64)cfg.lockAfter * 60 * G_USEC_PER_SEC) app_lock_now();
+}
+
+static void mark_away(void) {
+  if (!away_since) away_since = g_get_monotonic_time();
+}
+
+// Runs every 15 s, so the window is already locked when it comes back.
+static gboolean on_lock_timer(gpointer d) {
+  if (!win || !gtk_widget_get_visible(win) || iconified || !gtk_window_is_active(GTK_WINDOW(win))) {
+    mark_away();
+    check_away();
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+static gboolean on_focus_out(GtkWidget *w, GdkEvent *e, gpointer d) {
+  mark_away();
+  return FALSE;
+}
+
+// Checks a PIN and applies the wrong-PIN pauses. NULL when right, else the
+// message for the lock screen.
+static char *check_pin(const char *pin) {
+  gint64 now = g_get_real_time();
+  if (cfg.lockUntil * G_USEC_PER_SEC > now) {
+    char *w = lock_wait_text(cfg.lockUntil * G_USEC_PER_SEC - now);
+    char *m = g_strdup_printf("Too many tries. Try again in %s.", w);
+    g_free(w);
+    return m;
+  }
+  char *got = pin_hash(pin ? pin : "", cfg.lockSalt);
+  gboolean ok = equal_ct(cfg.lockHash, got);
+  g_free(got);
+  if (ok) {
+    cfg.lockFails = 0;
+    cfg.lockUntil = 0;
+    save_config();
+    return NULL;
+  }
+  cfg.lockFails++;
+  char *msg;
+  if (cfg.lockFails >= FREE_TRIES) {
+    int k = cfg.lockFails - FREE_TRIES;
+    gint64 wait = k >= 4 ? MAX_WAIT_S : (gint64)FIRST_WAIT_S << k;
+    if (wait > MAX_WAIT_S || wait <= 0) wait = MAX_WAIT_S;
+    cfg.lockUntil = now / G_USEC_PER_SEC + wait;
+    char *w = lock_wait_text(wait * G_USEC_PER_SEC);
+    msg = g_strdup_printf("Wrong PIN. Try again in %s.", w);
+    g_free(w);
+  } else if (FREE_TRIES - cfg.lockFails <= 2) {
+    int left = FREE_TRIES - cfg.lockFails;
+    msg = g_strdup_printf("Wrong PIN. %d %s left before a pause.", left, left == 1 ? "try" : "tries");
+  } else {
+    msg = g_strdup("Wrong PIN.");
+  }
+  save_config();
+  return msg;
+}
+
+static gboolean set_pin(const char *pin) {
+  char *salt = pin_new_salt();
+  if (!salt) return FALSE;
+  char *h = pin_hash(pin, salt);
+  str_set(&cfg.lockSalt, salt);
+  str_set(&cfg.lockHash, h);
+  cfg.lockFails = 0;
+  cfg.lockUntil = 0;
+  g_free(salt);
+  g_free(h);
+  return TRUE;
+}
+
+static void clear_lock(void) {
+  cfg.lockEnabled = FALSE;
+  str_set(&cfg.lockHash, "");
+  str_set(&cfg.lockSalt, "");
+  cfg.lockFails = 0;
+  cfg.lockUntil = 0;
+  save_config();
+}
+
+static void lock_reply(const char *op, gboolean ok, const char *error) {
+  GString *g = g_string_new("twincxt.lockResult({\"op\":");
+  json_esc(g, op);
+  g_string_append_printf(g, ",\"ok\":%s,\"error\":", ok ? "true" : "false");
+  json_esc(g, error ? error : "");
+  g_string_append(g, "})");
+  shell_eval(g->str);
+  g_string_free(g, TRUE);
+}
+
+// The shell's "lock" messages: {op: set|change|disable|unlock|now|reset, pin, old}.
+static void on_lock_message(JSCValue *data) {
+  char *op = jstr(data, "op"), *pin = jstr(data, "pin"), *old = jstr(data, "old");
+  char *msg = NULL;
+  if (!op) goto out;
+  if (!strcmp(op, "set")) {
+    if (cfg.lockEnabled) lock_reply(op, FALSE, "App lock is already on.");
+    else if (!pin_format_ok(pin)) lock_reply(op, FALSE, "Use 4 to 8 digits.");
+    else if (!set_pin(pin)) lock_reply(op, FALSE, "Can't set the PIN.");
+    else {
+      cfg.lockEnabled = TRUE;
+      save_config();
+      tw_log("lock: turned on");
+      lock_reply(op, TRUE, NULL);
+      push_state();
+      update_tray_lock();
+    }
+  } else if (!strcmp(op, "change")) {
+    if ((msg = check_pin(old))) lock_reply(op, FALSE, msg);
+    else if (!pin_format_ok(pin)) lock_reply(op, FALSE, "Use 4 to 8 digits.");
+    else if (!set_pin(pin)) lock_reply(op, FALSE, "Can't set the PIN.");
+    else {
+      save_config();
+      lock_reply(op, TRUE, NULL);
+    }
+  } else if (!strcmp(op, "disable")) {
+    if ((msg = check_pin(old))) lock_reply(op, FALSE, msg);
+    else {
+      clear_lock();
+      tw_log("lock: turned off");
+      lock_reply(op, TRUE, NULL);
+      push_state();
+      update_tray_lock();
+    }
+  } else if (!strcmp(op, "unlock")) {
+    if (!app_locked) goto out;
+    if ((msg = check_pin(pin))) lock_reply(op, FALSE, msg);
+    else {
+      lock_reply(op, TRUE, NULL);
+      unlock_app();
+    }
+  } else if (!strcmp(op, "now")) {
+    app_lock_now();
+  } else if (!strcmp(op, "reset")) {
+    if (!app_locked) goto out;
+    tw_log("lock: forgot PIN, signing out of both services");
+    run_action("reset:wa");
+    run_action("reset:tg");
+    clear_lock();
+    lock_reply(op, TRUE, NULL);
+    unlock_app();
+  }
+out:
+  g_free(msg);
+  g_free(op);
+  g_free(pin);
+  g_free(old);
+}
+
 // ---- messages from the shell ---------------------------------------------------------------
 
 static void on_shell_msg(WebKitUserContentManager *u, WebKitJavascriptResult *r, gpointer d) {
@@ -785,6 +1014,8 @@ static void on_shell_msg(WebKitUserContentManager *u, WebKitJavascriptResult *r,
     if (key) set_option(key, val);
     g_clear_object(&val);
     g_free(key);
+  } else if (!strcmp(type, "lock")) {
+    on_lock_message(data);
   } else if (!strcmp(type, "action")) {
     if (ds) run_action(ds);
   } else if (!strcmp(type, "update")) {
@@ -842,6 +1073,10 @@ static void notify_message(Svc *s, const char *title, const char *body) {
   if ((s == &svcs[0] && !cfg.notifyWa) || (s == &svcs[1] && !cfg.notifyTg)) return;
   gboolean focused = window_focused();
   if (focused && s == active_svc() && !settings_open) return;  // already looking at it
+  if (app_locked) {  // locked: say that something arrived, not what
+    title = s->name;
+    body = "New message";
+  }
   if (strcmp(cfg.notifyMode, "attention"))
     send_notification(title && *title ? title : s->name, body, s->id, "app.select", g_variant_new_string(s->id));
   if (strcmp(cfg.notifyMode, "toast") && !focused && win) gtk_window_set_urgency_hint(GTK_WINDOW(win), TRUE);
@@ -1270,11 +1505,24 @@ static void on_download_started(WebKitWebContext *c, WebKitDownload *d, gpointer
 // ---- keyboard ---------------------------------------------------------------------------------------
 
 // Shortcuts while any page has focus: Alt+1 / Alt+2, Ctrl+Tab, Ctrl+, (settings),
-// Ctrl+= / Ctrl+- / Ctrl+0 (zoom), Ctrl+Q (quit).
+// Ctrl+L (lock), Ctrl+= / Ctrl+- / Ctrl+0 (zoom), Ctrl+Q (quit).
 static gboolean on_key(GtkWidget *w, GdkEventKey *e, gpointer d) {
   GdkModifierType mods = e->state & gtk_accelerator_get_default_mod_mask();
   guint k = gdk_keyval_to_lower(e->keyval);
   gboolean ctrl = (mods & ~GDK_SHIFT_MASK) == GDK_CONTROL_MASK;
+  gboolean tab = k == GDK_KEY_Tab || k == GDK_KEY_ISO_Left_Tab || k == GDK_KEY_KP_Tab;
+  if (mods == GDK_CONTROL_MASK && k == GDK_KEY_l) {
+    app_lock_now();
+    return TRUE;
+  }
+  if (app_locked) {  // the lock screen: no switching, no settings
+    if (mods == GDK_CONTROL_MASK && k == GDK_KEY_q) {
+      app_quit();
+      return TRUE;
+    }
+    return (mods == GDK_MOD1_MASK && (k == GDK_KEY_1 || k == GDK_KEY_2 || k == GDK_KEY_KP_1 || k == GDK_KEY_KP_2)) ||
+           ((mods & GDK_CONTROL_MASK) && (tab || k == GDK_KEY_comma));
+  }
   if ((mods & GDK_CONTROL_MASK) && (k == GDK_KEY_Tab || k == GDK_KEY_ISO_Left_Tab || k == GDK_KEY_KP_Tab))
     select_service(active_svc() == &svcs[0] ? "tg" : "wa", "Ctrl+Tab");
   else if (mods == GDK_MOD1_MASK && (k == GDK_KEY_1 || k == GDK_KEY_KP_1)) select_service("wa", "shortcut");
@@ -1611,6 +1859,7 @@ static void create_window(gboolean autostarted) {
   g_signal_connect(win, "window-state-event", G_CALLBACK(on_window_state), NULL);
   g_signal_connect(win, "configure-event", G_CALLBACK(on_configure), NULL);
   g_signal_connect(win, "focus-in-event", G_CALLBACK(on_focus_in), NULL);
+  g_signal_connect(win, "focus-out-event", G_CALLBACK(on_focus_out), NULL);
   g_signal_connect(win, "key-press-event", G_CALLBACK(on_key), NULL);
 
   gtk_widget_show_all(overlay);
@@ -1699,6 +1948,9 @@ static void start(gboolean autostarted) {
   tray_init(gtk_icon_theme_has_icon(gtk_icon_theme_get_default(), "twincxt") ? "twincxt" : icon);
   g_free(icon);
   setup_web();
+  if (cfg.lockEnabled && *cfg.lockHash) app_locked = TRUE;  // locked from the first frame
+  g_timeout_add_seconds(15, on_lock_timer, NULL);
+  update_tray_lock();
   create_window(autostarted);
   updater_init();
   updater_start();
@@ -1729,6 +1981,7 @@ int main(int argc, char **argv) {
       return 0;
     }
   }
+  if (g_getenv("TWINCXT_SELFTEST")) return pin_selftest();
   init_paths();
   load_config();
   ui_dir = find_ui_dir();

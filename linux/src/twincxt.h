@@ -45,7 +45,17 @@ void updater_skip(void);
 char *updater_state_json(void);
 gboolean version_newer(const char *a, const char *b);
 
+// applock.c
+char *pin_hash(const char *pin, const char *salt_hex);  // hex PBKDF2-HMAC-SHA256
+char *pin_new_salt(void);                              // 16 random bytes, hex
+gboolean pin_format_ok(const char *pin);               // ^[0-9]{4,8}$
+gboolean equal_ct(const char *a, const char *b);       // constant time
+char *lock_wait_text(gint64 usec);                     // "30 seconds", "5 minutes"
+int pin_selftest(void);
+void app_lock_now(void);
+
 // tray.c (libayatana-appindicator3, loaded at run time when present)
 gboolean tray_init(const char *icon);
 gboolean tray_available(void);
 void tray_update(int wa, int tg);
+void tray_set_lock(gboolean show);  // the "Lock" item

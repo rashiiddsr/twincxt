@@ -14,12 +14,13 @@ typedef void (*widget_fn)(void *ind, GtkWidget *w);
 static void *ind;
 static str_fn set_title;
 static gboolean host;  // a StatusNotifierWatcher (the tray) is running
-static GtkWidget *item_wa, *item_tg;
+static GtkWidget *item_wa, *item_tg, *item_lock;
 
 static void on_open(GtkMenuItem *i, gpointer d) { app_show_window(); }
 static void on_wa(GtkMenuItem *i, gpointer d) { app_select("wa"); }
 static void on_tg(GtkMenuItem *i, gpointer d) { app_select("tg"); }
 static void on_settings(GtkMenuItem *i, gpointer d) { app_open_settings(); }
+static void on_lock(GtkMenuItem *i, gpointer d) { app_lock_now(); }
 static void on_quit(GtkMenuItem *i, gpointer d) { app_quit(); }
 
 static GtkWidget *item(GtkWidget *menu, const char *label, GCallback cb) {
@@ -64,9 +65,11 @@ gboolean tray_init(const char *icon) {
   item_wa = item(menu, "WhatsApp", G_CALLBACK(on_wa));
   item_tg = item(menu, "Telegram", G_CALLBACK(on_tg));
   item(menu, NULL, NULL);
+  item_lock = item(menu, "Lock", G_CALLBACK(on_lock));
   item(menu, "Settings", G_CALLBACK(on_settings));
   item(menu, "Quit", G_CALLBACK(on_quit));
   gtk_widget_show_all(menu);
+  gtk_widget_hide(item_lock);
   set_menu(ind, GTK_MENU(menu));
   if (set_secondary) set_secondary(ind, open);  // middle click opens the window
   if (set_title) set_title(ind, "Twincxt");
@@ -76,6 +79,10 @@ gboolean tray_init(const char *icon) {
 }
 
 gboolean tray_available(void) { return ind && host; }
+
+void tray_set_lock(gboolean show) {
+  if (item_lock) gtk_widget_set_visible(item_lock, show);
+}
 
 void tray_update(int wa, int tg) {
   if (!ind) return;
