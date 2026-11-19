@@ -733,6 +733,11 @@ func (a *app) pushState() {
 		"telegramVersion": a.cfg.TelegramVersion,
 		"notifyMode":      a.cfg.NotifyMode,
 		"autoUpdate":      a.cfg.AutoUpdate,
+		"blurMessages":    a.cfg.BlurMessages,
+		"blurPreviews":    a.cfg.BlurPreviews,
+		"blurNames":       a.cfg.BlurNames,
+		"blurPhotos":      a.cfg.BlurPhotos,
+		"blurMedia":       a.cfg.BlurMedia,
 		"platform":        "windows",
 		"version":         appVersion,
 		"maximized":       isZoomed(a.hwnd),
@@ -740,6 +745,22 @@ func (a *app) pushState() {
 	}
 	b, _ := json.Marshal(st)
 	a.shell.Eval("twincxt.state(" + string(b) + ")")
+}
+
+// pushPrivacy hands the blur settings to a service page (ui/service.js keeps
+// them in the site's localStorage so the next load is blurred from the start).
+func (a *app) pushPrivacy(s *service) {
+	if s == nil || s.wv == nil {
+		return
+	}
+	b, _ := json.Marshal(map[string]bool{
+		"blurMessages": a.cfg.BlurMessages,
+		"blurPreviews": a.cfg.BlurPreviews,
+		"blurNames":    a.cfg.BlurNames,
+		"blurPhotos":   a.cfg.BlurPhotos,
+		"blurMedia":    a.cfg.BlurMedia,
+	})
+	s.wv.Eval("window.twincxtPrivacy && window.twincxtPrivacy(" + string(b) + ")")
 }
 
 func (a *app) pushUnread(s *service) {
@@ -822,6 +843,22 @@ func (a *app) setOption(key string, raw json.RawMessage) {
 		a.cfg.AutoUpdate = b
 		if b {
 			a.upd.check(false)
+		}
+	case "blurMessages", "blurPreviews", "blurNames", "blurPhotos", "blurMedia":
+		switch key {
+		case "blurMessages":
+			a.cfg.BlurMessages = b
+		case "blurPreviews":
+			a.cfg.BlurPreviews = b
+		case "blurNames":
+			a.cfg.BlurNames = b
+		case "blurPhotos":
+			a.cfg.BlurPhotos = b
+		case "blurMedia":
+			a.cfg.BlurMedia = b
+		}
+		for _, s := range []*service{a.svc("wa"), a.svc("tg")} {
+			a.pushPrivacy(s)
 		}
 	case "notifyWa":
 		a.cfg.NotifyWA = b
@@ -911,6 +948,7 @@ func (a *app) setupService(s *service, wv *webView) {
 		}
 	})
 	wv.OnNavigationCompleted(func() {
+		a.pushPrivacy(s)
 		// Test hook (TWINCXT_TEST_POPUP=1): one popup opened by the page on
 		// its own (must be blocked) and one opened from a real click on a test
 		// button (must open, with content written right after window.open).

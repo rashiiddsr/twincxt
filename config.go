@@ -29,6 +29,11 @@ type config struct {
 	NotifyMode      string      `json:"notifyMode"` // toast | attention | both
 	AutoUpdate      bool        `json:"autoUpdate"`
 	SkippedVersion  string      `json:"skippedVersion"`
+	BlurMessages    bool        `json:"blurMessages"`
+	BlurPreviews    bool        `json:"blurPreviews"`
+	BlurNames       bool        `json:"blurNames"`
+	BlurPhotos      bool        `json:"blurPhotos"`
+	BlurMedia       bool        `json:"blurMedia"`
 	Window          windowState `json:"window"`
 }
 
