@@ -74,6 +74,23 @@ jobs:
           echo "--- app output"; tail -n 80 app.log || true
           ls -la mac-*.png || true
 
+      # Dark theme, and a WhatsApp call window opened and closed the way its
+      # close button would (the call is handed back through "Move here").
+      - name: Start it (dark, call window)
+        run: |
+          app=build/mac/Twincxt.app
+          data="$RUNNER_TEMP/twincxt-dark"
+          mkdir -p "$data"
+          echo '{"theme":"dark","blurNames":true}' > "$data/config.json"
+          export TWINCXT_SMOKE=30 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$data" TWINCXT_TEST_POPUP=1
+          export TWINCXT_SMOKE_SHOT="$PWD/mac-dark.png"
+          "$app/Contents/MacOS/Twincxt" > app-dark.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 70); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+          kill $pid 2>/dev/null || true
+          cat app-dark.log || true
+          grep -q "test: popups open = 1" app-dark.log && grep -q "test: popups after close = 0" app-dark.log && echo "call window ok"
+
       - name: Checksums
         run: |
           cd build/mac
@@ -97,7 +114,7 @@ jobs:
           name: Twincxt-macOS-check
           path: |
             mac-*.png
-            app.log
+            app*.log
           if-no-files-found: ignore
 
       - name: Attach to the release
