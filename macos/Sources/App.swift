@@ -86,7 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   var shellReady = false
   var quitting = false
   var settingsOpen = false
-  var locked = false // a required update must be installed first
+  var updateLocked = false // a required update must be installed first
+  var appLocked = false // the app lock screen is showing (AppLock.swift)
+  var awaySince: Date?
+  var lockTimer: Timer?
   var hideAfterFullScreen = false
   var placingLights = false
   var services: [String: Service] = ["wa": Service("wa"), "tg": Service("tg")]
@@ -125,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     NSWindow.allowsAutomaticWindowTabbing = false
     applyTheme()
     cfg.autostart = autostartEnabled()
+    startLock()
     buildMenu()
     setupNotifications()
     createWindow(show: !(atLogin && cfg.startHidden))
@@ -273,7 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     for id in ["wa", "tg"] {
       guard let v = services[id]?.view else { continue }
       if v.frame != content { v.frame = content }
-      if !settingsOpen && id == cfg.active { over.append(v) } else { under.append(v) }
+      if !settingsOpen && !appLocked && id == cfg.active { over.append(v) } else { under.append(v) }
     }
     let order = under + [shell] + over
     if root.subviews != order { root.subviews = order }
@@ -281,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   func focusActive() {
     guard let w = window else { return }
-    if settingsOpen { w.makeFirstResponder(shell) } else if let v = services[cfg.active]?.view { w.makeFirstResponder(v) }
+    if settingsOpen || appLocked { w.makeFirstResponder(shell) } else if let v = services[cfg.active]?.view { w.makeFirstResponder(v) }
   }
 
   func showWindow() {
@@ -370,6 +374,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   func windowDidBecomeKey(_ notification: Notification) {
     guard (notification.object as? NSWindow) === window else { return }
     placeTrafficLights()
+    onActivate(true)
+  }
+
+  func windowDidMiniaturize(_ notification: Notification) {
+    guard (notification.object as? NSWindow) === window else { return }
+    onActivate(false)
+  }
+
+  func windowDidDeminiaturize(_ notification: Notification) {
+    guard (notification.object as? NSWindow) === window else { return }
+    onActivate(true)
   }
 
   func windowDidExitFullScreen(_ notification: Notification) {
@@ -409,6 +424,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       "autoUpdate": cfg.autoUpdate,
       "maximized": window?.isZoomed ?? false,
       "settingsOpen": settingsOpen,
+      "lockEnabled": cfg.lockEnabled,
+      "locked": appLocked,
+      "lockAfter": cfg.lockAfter,
     ]
     for k in BLUR_KEYS { st[k] = cfg.blur[k] ?? false }
     shellEval("twincxt.state(" + json(st) + ")")
@@ -429,7 +447,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   func selectService(_ id: String, _ source: String) {
     guard services[id] != nil else { return }
-    if locked {
+    if updateLocked {
       settingsOpen = true
       layout()
       pushState()
@@ -446,7 +464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   }
 
   func toggleSettings(_ on: Bool?) {
-    settingsOpen = locked || (on ?? !settingsOpen)
+    settingsOpen = updateLocked || (on ?? !settingsOpen)
     layout()
     pushState()
     applyStrip()
@@ -454,8 +472,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   }
 
   func lockForUpdate() {
-    if locked { return }
-    locked = true
+    if updateLocked { return }
+    updateLocked = true
     dlog("update: below the minimum version, services locked")
     settingsOpen = true
     layout()
@@ -504,6 +522,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       case "close": window.performClose(nil)
       default: break // "drag": done natively from the drag regions
       }
+    case "lock":
+      onLockMessage(data)
     case "regions":
       if let d = data as? [String: Any] {
         func rects(_ a: Any?) -> [CGRect] {
@@ -537,6 +557,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     case "autostart":
       setAutostart(b)
     case "startHidden": cfg.startHidden = b
+    case "lockAfter":
+      let n = Int(s) ?? (value as? NSNumber)?.intValue ?? -1
+      if [0, 1, 5, 15].contains(n) { cfg.lockAfter = n }
     case "closeAction": cfg.closeAction = s == "quit" ? "quit" : "tray"
     case "notifyWa": cfg.notifyWa = b
     case "notifyTg": cfg.notifyTg = b
@@ -975,8 +998,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     if (s.id == "wa" && !cfg.notifyWa) || (s.id == "tg" && !cfg.notifyTg) { return }
     let focused = window.isVisible && window.isKeyWindow && NSApp.isActive && !window.isMiniaturized
     if focused && s.id == cfg.active && !settingsOpen { return } // already looking at it
+    var title = title.isEmpty ? (NAMES[s.id] ?? "Twincxt") : title
+    var body = body
+    if appLocked {
+      // Locked: say that something arrived, not what.
+      title = NAMES[s.id] ?? "Twincxt"
+      body = "New message"
+    }
     if cfg.notifyMode != "attention" {
-      post(title: title.isEmpty ? (NAMES[s.id] ?? "Twincxt") : title, body: body, info: ["svc": s.id])
+      post(title: title, body: body, info: ["svc": s.id])
     }
     if cfg.notifyMode != "toast" && !focused {
       NSApp.requestUserAttention(.informationalRequest) // bounces the Dock icon once
@@ -1065,6 +1095,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       item("Check for Updates…", #selector(menuCheckUpdates(_:)), "", .command, self),
       sep(),
       item("Settings…", #selector(menuSettings(_:)), ",", .command, self),
+      item("Lock", #selector(menuLock(_:)), "l", .command, self),
       sep(),
       servicesItem,
       sep(),
@@ -1119,14 +1150,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   }
 
   @objc func menuCheckUpdates(_ sender: Any?) {
-    toggleSettings(true)
+    if !appLocked { toggleSettings(true) }
     showWindow()
     updater.check(true)
   }
 
   @objc func menuSettings(_ sender: Any?) {
+    if appLocked { showWindow(); return }
     toggleSettings(true)
     showWindow()
+  }
+
+  @objc func menuLock(_ sender: Any?) { lockNow() }
+
+  @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+    switch item.action {
+    case #selector(menuLock(_:)): return cfg.lockEnabled && !appLocked
+    case #selector(menuWhatsApp(_:)), #selector(menuTelegram(_:)), #selector(menuSwitch(_:)),
+         #selector(menuSettings(_:)), #selector(menuZoomIn(_:)), #selector(menuZoomOut(_:)), #selector(menuZoomReset(_:)):
+      return !appLocked
+    default: return true
+    }
   }
 
   @objc func menuQuit(_ sender: Any?) { quit() }
@@ -1161,6 +1205,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
       guard let self = self, e.window === self.window else { return e }
       let flags = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      if flags == .command && e.charactersIgnoringModifiers?.lowercased() == "l" {
+        self.lockNow()
+        return nil
+      }
+      if self.appLocked {
+        // Locked: the switching shortcuts do nothing.
+        if e.keyCode == 48 && flags.contains(.control) { return nil }
+        if flags == .command && ["1", "2", ","].contains(e.charactersIgnoringModifiers ?? "") { return nil }
+        return e
+      }
       if e.keyCode == 48 && flags.contains(.control) { // Tab
         self.selectService(self.cfg.active == "wa" ? "tg" : "wa", "Ctrl+Tab")
         return nil
@@ -1223,6 +1277,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   func smokeFinish() {
     smokeReport()
     guard let path = env["TWINCXT_SMOKE_SHOT"], !path.isEmpty, window.isVisible else { quit(); return }
+    if appLocked {
+      // Started locked: show the lock screen, then try a wrong and the right PIN.
+      capture((path as NSString).deletingPathExtension + "-locked.png")
+      let pin = env["TWINCXT_TEST_PIN"] ?? ""
+      onLockMessage(["op": "unlock", "pin": "0000"])
+      dlog("smoke: after wrong PIN locked=\(appLocked) fails=\(cfg.lockFails)")
+      if !pin.isEmpty { onLockMessage(["op": "unlock", "pin": pin]) }
+      dlog("smoke: after right PIN locked=\(appLocked) fails=\(cfg.lockFails)")
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.smokeShots(path) }
+      return
+    }
+    smokeShots(path)
+  }
+
+  func smokeShots(_ path: String) {
     capture(path)
     toggleSettings(true)
     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in

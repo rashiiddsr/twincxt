@@ -60,6 +60,9 @@ jobs:
           du -sh "$app"
           ls -la build/mac
 
+      - name: Self-test (app lock PIN hashing)
+        run: TWINCXT_SELFTEST=1 build/mac/Twincxt.app/Contents/MacOS/Twincxt
+
       - name: Start it
         run: |
           app=build/mac/Twincxt.app
@@ -74,15 +77,16 @@ jobs:
           echo "--- app output"; tail -n 80 app.log || true
           ls -la mac-*.png || true
 
-      # Dark theme, and a WhatsApp call window opened and closed the way its
-      # close button would (the call is handed back through "Move here").
+      # Dark theme, app lock on (PIN 1234; starts locked, a wrong and the right
+      # PIN are tried), and a WhatsApp call window opened and closed the way
+      # its close button would (the call is handed back through "Move here").
       - name: Start it (dark, call window)
         run: |
           app=build/mac/Twincxt.app
           data="$RUNNER_TEMP/twincxt-dark"
           mkdir -p "$data"
-          echo '{"theme":"dark","blurNames":true}' > "$data/config.json"
-          export TWINCXT_SMOKE=30 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$data" TWINCXT_TEST_POPUP=1
+          echo '{"theme":"dark","blurNames":true,"lockEnabled":true,"lockAfter":1,"lockSalt":"00112233445566778899aabbccddeeff","lockHash":"98cd56f19733a361768b76706415776c6f3e161aef907b7e88c5ea3fe5639ab7"}' > "$data/config.json"
+          export TWINCXT_SMOKE=30 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$data" TWINCXT_TEST_POPUP=1 TWINCXT_TEST_PIN=1234
           export TWINCXT_SMOKE_SHOT="$PWD/mac-dark.png"
           "$app/Contents/MacOS/Twincxt" > app-dark.log 2>&1 &
           pid=$!
@@ -90,6 +94,8 @@ jobs:
           kill $pid 2>/dev/null || true
           cat app-dark.log || true
           grep -q "test: popups open = 1" app-dark.log && grep -q "test: popups after close = 0" app-dark.log && echo "call window ok"
+          grep -q "smoke: after wrong PIN locked=true fails=1" app-dark.log && grep -q "smoke: after right PIN locked=false fails=0" app-dark.log && echo "app lock ok"
+          cat "$data/config.json"
 
       - name: Checksums
         run: |

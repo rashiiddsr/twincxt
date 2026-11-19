@@ -48,6 +48,13 @@ final class Config {
   var autoUpdate = true
   var skippedVersion = ""
   var blur: [String: Bool] = [:]
+  // App lock (AppLock.swift).
+  var lockEnabled = false
+  var lockHash = "" // PBKDF2-HMAC-SHA256 of the PIN, hex
+  var lockSalt = "" // hex
+  var lockAfter = 5 // minutes in the background; 0 = only on start
+  var lockFails = 0
+  var lockUntil: Int64 = 0 // unix seconds; no tries before this
   // Window frame, top-left origin on the primary screen (the Electron app's convention).
   var winX: Double = 0
   var winY: Double = 0
@@ -95,6 +102,14 @@ final class Config {
     autoUpdate = bool("autoUpdate", true)
     skippedVersion = d["skippedVersion"] as? String ?? ""
     for k in BLUR_KEYS { blur[k] = bool(k, false) }
+    lockEnabled = bool("lockEnabled", false)
+    lockHash = d["lockHash"] as? String ?? ""
+    lockSalt = d["lockSalt"] as? String ?? ""
+    lockAfter = (d["lockAfter"] as? NSNumber)?.intValue ?? 5
+    if ![0, 1, 5, 15].contains(lockAfter) { lockAfter = 5 }
+    lockFails = max(0, (d["lockFails"] as? NSNumber)?.intValue ?? 0)
+    lockUntil = (d["lockUntil"] as? NSNumber)?.int64Value ?? 0
+    if lockEnabled && lockHash.isEmpty { lockEnabled = false }
     if let w = d["window"] as? [String: Any] {
       func n(_ k: String, _ def: Double) -> Double { (w[k] as? NSNumber)?.doubleValue ?? def }
       winX = n("x", 0)
@@ -121,6 +136,12 @@ final class Config {
     d["autoUpdate"] = autoUpdate
     d["skippedVersion"] = skippedVersion
     for k in BLUR_KEYS { d[k] = blur[k] ?? false }
+    d["lockEnabled"] = lockEnabled
+    d["lockHash"] = lockHash
+    d["lockSalt"] = lockSalt
+    d["lockAfter"] = lockAfter
+    d["lockFails"] = lockFails
+    d["lockUntil"] = lockUntil
     d["window"] = ["x": winX, "y": winY, "w": winW, "h": winH, "maximized": winMax] as [String: Any]
     return d
   }
