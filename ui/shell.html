@@ -434,6 +434,46 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 .notice b { display: block; }
 .notice span { color: var(--text-2); font-size: 13px; }
 
+/* ---------- app lock ---------- */
+.lockscreen { position: fixed; left: 0; right: 0; top: var(--strip-h); bottom: 0; z-index: 6; display: grid; place-items: center; background: var(--page); user-select: none; }
+.lockscreen[hidden] { display: none; }
+.lock-box { width: 320px; display: grid; justify-items: center; text-align: center; gap: 14px; }
+.lock-box[hidden] { display: none; }
+.lock-box > svg.mark-big { width: 44px; height: 44px; margin-bottom: 6px; }
+.lock-box h2 { margin: 0; font: 600 20px/28px var(--font-display); }
+.lock-box p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 19px; }
+.lock-box form { display: flex; gap: 8px; width: 100%; margin-top: 6px; }
+.pin { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border-radius: var(--control-radius); border: 1px solid var(--stroke-strong); background: var(--control); color: var(--text); font: 600 18px/1 var(--font); letter-spacing: .3em; text-align: center; }
+.pin:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.pin::placeholder { letter-spacing: 0; font-weight: 400; font-size: 14px; color: var(--text-2); }
+.lock-msg { min-height: 19px; color: var(--danger) !important; }
+:root[data-theme="dark"] .lock-msg { color: #FF99A4 !important; }
+.link { color: var(--accent); font-size: 13px; padding: 4px 6px; border-radius: 4px; }
+.link:hover { text-decoration: underline; }
+.lock-actions { display: flex; gap: 8px; margin-top: 6px; }
+.app.app-locked .halves, .app.app-locked .zoom, .app.app-locked .foot { visibility: hidden; }
+
+/* PIN dialog */
+.sheet-bg { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(0, 0, 0, .32); }
+.sheet-bg[hidden] { display: none; }
+.sheet { width: 360px; padding: 22px 24px 20px; border-radius: 10px; background: var(--card); color: var(--text); box-shadow: 0 0 0 1px var(--stroke-strong), 0 24px 60px rgba(0, 0, 0, .3); display: grid; gap: 12px; }
+:root[data-platform="mac"] .sheet { border-radius: 12px; }
+:root[data-platform="linux"] .sheet { border-radius: 14px; }
+.sheet h3 { margin: 0 0 4px; font: 600 18px/24px var(--font-display); }
+.sheet label { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+.sheet label[hidden] { display: none; }
+.sheet .pin { text-align: left; }
+.sheet-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
+.sheet-note[hidden] { display: none; }
+.sheet-msg { margin: 0; min-height: 17px; font-size: 12px; color: var(--danger); }
+:root[data-theme="dark"] .sheet-msg { color: #FF99A4; }
+.sheet-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* Sidebar foot: a lock button above the gear once the app lock is on. */
+.foot { gap: 2px; align-content: center; }
+.app.lock-on .side { grid-template-rows: var(--strip-h) 1fr calc(var(--foot-h) + 38px); }
+.foot #lockBtn[hidden] { display: none; }
+
 /* Invisible band along the top edge: drag it to resize the frameless window (Windows). */
 .top-resize { position: fixed; top: 0; left: 0; right: 138px; height: 4px; cursor: ns-resize; z-index: 10; }
 .app.maximized .top-resize, :root[data-platform="mac"] .top-resize, :root[data-platform="linux"] .top-resize { display: none; }
@@ -462,6 +502,14 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   <symbol id="i-gmax" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1"/></symbol>
   <symbol id="i-gres" viewBox="0 0 10 10"><rect x="1.5" y="3" width="5.5" height="5.5" rx="1"/><path d="M3.5 3V1.5h5v5H7"/></symbol>
   <symbol id="i-gclose" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2 2 8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8m-3 3 2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 3h5"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4v-14Z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><circle cx="5.5" cy="7" r="1.5"/><circle cx="5.5" cy="12" r="1.5"/><circle cx="5.5" cy="17" r="1.5"/><path d="M10 7h9.5M10 12h9.5M10 17h6"/></symbol>
+  <symbol id="i-name" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 15.5c.6-1.4 1.6-2 3-2s2.4.6 3 2M14 10h4M14 13h3"/></symbol>
+  <symbol id="i-avatar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.2c1.2-2 3-3 5.5-3s4.3 1 5.5 3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m4 17 5-5 4 4 2.5-2.5L20 18"/></symbol>
   <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
 </svg>
 <div class="app" id="app" data-active="wa">
@@ -490,6 +538,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     </div>
 
     <div class="foot">
+      <button class="icon-btn" id="lockBtn" hidden><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg></button>
       <button class="icon-btn" id="settingsBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg></button>
     </div>
   </nav>
@@ -599,27 +648,47 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
         <div class="group-title">Privacy</div>
         <div class="cards">
           <div class="card">
-            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-eye"/></svg></span>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-lock"/></svg></span>
+            <div class="card-text"><div class="card-title">App lock</div></div>
+            <button class="toggle" role="switch" id="lockToggle"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card" data-lock-row hidden>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-key"/></svg></span>
+            <div class="card-text"><div class="card-title">PIN</div></div>
+            <button class="btn" id="lockChange">Change PIN</button>
+          </div>
+          <div class="card" data-lock-row hidden>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-timer"/></svg></span>
+            <div class="card-text"><div class="card-title">Lock after</div></div>
+            <div class="combo" data-choice="lockAfter">
+              <button data-value="1">1 min</button>
+              <button data-value="5">5 min</button>
+              <button data-value="15">15 min</button>
+              <button data-value="0">On start</button>
+            </div>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-msg"/></svg></span>
             <div class="card-text"><div class="card-title">Blur messages</div></div>
             <button class="toggle" role="switch" data-setting="blurMessages"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
-            <span class="glyph" aria-hidden="true"></span>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-list"/></svg></span>
             <div class="card-text"><div class="card-title">Blur chat previews</div></div>
             <button class="toggle" role="switch" data-setting="blurPreviews"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
-            <span class="glyph" aria-hidden="true"></span>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-name"/></svg></span>
             <div class="card-text"><div class="card-title">Blur names</div></div>
             <button class="toggle" role="switch" data-setting="blurNames"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
-            <span class="glyph" aria-hidden="true"></span>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-avatar"/></svg></span>
             <div class="card-text"><div class="card-title">Blur profile photos</div></div>
             <button class="toggle" role="switch" data-setting="blurPhotos"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
-            <span class="glyph" aria-hidden="true"></span>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-image"/></svg></span>
             <div class="card-text"><div class="card-title">Blur photos and videos</div></div>
             <button class="toggle" role="switch" data-setting="blurMedia"><span class="state"></span><span class="track"></span></button>
           </div>
@@ -668,6 +737,45 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       </div>
     </section>
   </main>
+
+  <section class="lockscreen" id="lockscreen" hidden>
+    <div class="lock-box" id="unlockBox">
+      <svg class="mark-big" viewBox="0 0 20 20" aria-hidden="true">
+        <path fill="var(--wa)" d="M4.4 1.6h7.4a3 3 0 0 1 0 6H5.9l-3 1.9.6-2.1a3 3 0 0 1 .9-5.8Z"/>
+        <path fill="var(--tg)" d="M15.6 10.4H8.2a3 3 0 0 0 0 6h5.9l3 1.9-.6-2.1a3 3 0 0 0-.9-5.8Z"/>
+      </svg>
+      <h2>Twincxt is locked</h2>
+      <form id="unlockForm" autocomplete="off">
+        <input class="pin" id="unlockPin" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN" aria-label="PIN">
+        <button class="btn primary" id="unlockBtn">Unlock</button>
+      </form>
+      <p class="lock-msg" id="unlockMsg"></p>
+      <button class="link" id="forgotBtn">Forgot PIN?</button>
+    </div>
+    <div class="lock-box" id="resetBox" hidden>
+      <h2>Reset app lock?</h2>
+      <p>This signs you out of WhatsApp and Telegram and removes the PIN. Scan the QR codes with your phone to sign back in.</p>
+      <div class="lock-actions">
+        <button class="btn" id="resetCancel">Cancel</button>
+        <button class="btn armed" id="resetGo">Sign out and reset</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="sheet-bg" id="pinSheet" hidden>
+    <form class="sheet" id="pinForm" autocomplete="off">
+      <h3 id="pinTitle">Set a PIN</h3>
+      <label data-f="old">Current PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="old"></label>
+      <label data-f="new">New PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="pin"></label>
+      <label data-f="confirm">Confirm PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="confirm"></label>
+      <p class="sheet-note" data-f="note">If you forget it, you can reset it by signing out of WhatsApp and Telegram.</p>
+      <p class="sheet-msg" id="pinMsg"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn" id="pinCancel">Cancel</button>
+        <button class="btn primary" id="pinOk">Save</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -684,6 +792,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     autostart: false, startHidden: false, closeAction: 'tray',
     notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
     autoUpdate: true,
+    // App lock: the host keeps the PIN (hashed) and decides when to lock.
+    lockEnabled: false, locked: false, lockAfter: 5,
     blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
     // Linux: GNOME's button layout (org.gnome.desktop.wm.preferences button-layout).
     decorationLayout: 'appmenu:close',
@@ -783,17 +893,18 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     document.querySelectorAll('[data-zoom-for]').forEach(function (z) {
       z.querySelector('.val').textContent = s.zoom[z.dataset.zoomFor] + '%';
     });
-    document.querySelectorAll('.toggle').forEach(function (b) {
+    document.querySelectorAll('.toggle[data-setting]').forEach(function (b) {
       var on = !!s[b.dataset.setting];
       b.setAttribute('aria-checked', String(on));
       b.querySelector('.state').textContent = on ? 'On' : 'Off';
     });
     document.querySelectorAll('[data-choice]').forEach(function (g) {
       g.querySelectorAll('button').forEach(function (b) {
-        b.setAttribute('aria-pressed', String(s[g.dataset.choice] === b.dataset.value));
+        b.setAttribute('aria-pressed', String(String(s[g.dataset.choice]) === b.dataset.value));
       });
     });
     renderUpdate();
+    renderLock();
     requestAnimationFrame(sendRegions);
     document.title = s.settingsOpen ? 'Settings - Twincxt' : NAMES[s.active] + ' - Twincxt';
   }
@@ -840,13 +951,108 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   }
   window.addEventListener('resize', function () { sendRegions(); });
 
+  // ---- app lock ---------------------------------------------------------------
+  var lockWasShown = false;
+  function renderLock() {
+    var on = !!s.lockEnabled, shown = on && !!s.locked;
+    app.classList.toggle('lock-on', on);
+    app.classList.toggle('app-locked', shown);
+    var tg = document.getElementById('lockToggle');
+    tg.setAttribute('aria-checked', String(on));
+    tg.querySelector('.state').textContent = on ? 'On' : 'Off';
+    document.querySelectorAll('[data-lock-row]').forEach(function (r) { r.hidden = !on; });
+    var lb = document.getElementById('lockBtn');
+    lb.hidden = !on;
+    lb.title = 'Lock (' + (s.platform === 'mac' ? '\u2318L' : 'Ctrl+L') + ')';
+    document.getElementById('lockscreen').hidden = !shown;
+    if (shown) {
+      if (!lockWasShown) {
+        document.getElementById('unlockBox').hidden = false;
+        document.getElementById('resetBox').hidden = true;
+        document.getElementById('unlockMsg').textContent = '';
+        var pin = document.getElementById('unlockPin');
+        pin.value = '';
+        setTimeout(function () { pin.focus(); }, 0);
+      }
+      document.getElementById('stripCtx').textContent = 'Locked';
+      document.title = 'Twincxt';
+    }
+    lockWasShown = shown;
+  }
+  function onlyDigits(v) { return /^[0-9]{4,8}$/.test(v); }
+
+  document.getElementById('unlockForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pin = document.getElementById('unlockPin');
+    if (!pin.value) return;
+    send('lock', { op: 'unlock', pin: pin.value });
+    pin.value = '';
+  });
+  document.getElementById('forgotBtn').addEventListener('click', function () {
+    document.getElementById('unlockBox').hidden = true;
+    document.getElementById('resetBox').hidden = false;
+  });
+  document.getElementById('resetCancel').addEventListener('click', function () {
+    document.getElementById('resetBox').hidden = true;
+    document.getElementById('unlockBox').hidden = false;
+    document.getElementById('unlockPin').focus();
+  });
+  document.getElementById('resetGo').addEventListener('click', function () { send('lock', { op: 'reset' }); });
+  document.getElementById('lockBtn').addEventListener('click', function () { send('lock', { op: 'now' }); });
+
+  // PIN dialog: mode "set" (turn on), "change", "disable" (turn off).
+  var sheetMode = '';
+  function openSheet(mode) {
+    sheetMode = mode;
+    var f = document.getElementById('pinForm');
+    f.reset();
+    document.getElementById('pinTitle').textContent = mode === 'set' ? 'Set a PIN' : mode === 'change' ? 'Change PIN' : 'Turn off app lock';
+    document.getElementById('pinOk').textContent = mode === 'disable' ? 'Turn off' : 'Save';
+    f.querySelector('[data-f="old"]').hidden = mode === 'set';
+    f.querySelector('[data-f="new"]').hidden = mode === 'disable';
+    f.querySelector('[data-f="confirm"]').hidden = mode === 'disable';
+    f.querySelector('[data-f="note"]').hidden = mode !== 'set';
+    document.getElementById('pinMsg').textContent = '';
+    document.getElementById('pinSheet').hidden = false;
+    var first = f.querySelector('label:not([hidden]) input');
+    setTimeout(function () { first.focus(); }, 0);
+  }
+  function closeSheet() { document.getElementById('pinSheet').hidden = true; sheetMode = ''; }
+  document.getElementById('pinCancel').addEventListener('click', closeSheet);
+  document.getElementById('pinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, msg = document.getElementById('pinMsg');
+    var old = f.old.value, pin = f.pin.value, confirm = f.confirm.value;
+    if (sheetMode !== 'disable') {
+      if (!onlyDigits(pin)) { msg.textContent = 'Use 4 to 8 digits.'; return; }
+      if (pin !== confirm) { msg.textContent = "PINs don't match."; return; }
+    }
+    if (sheetMode !== 'set' && !old) { msg.textContent = 'Enter your current PIN.'; return; }
+    send('lock', { op: sheetMode, pin: pin, old: old });
+  });
+  document.getElementById('lockToggle').addEventListener('click', function () { openSheet(s.lockEnabled ? 'disable' : 'set'); });
+  document.getElementById('lockChange').addEventListener('click', function () { openSheet('change'); });
+
+  // The host answers every lock request: { op, ok, error }.
+  function lockResult(r) {
+    r = r || {};
+    if (r.op === 'unlock' || r.op === 'reset') {
+      document.getElementById('unlockMsg').textContent = r.ok ? '' : (r.error || 'Wrong PIN');
+      return;
+    }
+    if (r.ok) closeSheet();
+    else document.getElementById('pinMsg').textContent = r.error || 'Wrong PIN';
+  }
+
   function locked() { return !!(s.update && s.update.required); }
   function select(svc) {
+    if (s.locked) return;
     if (locked()) { openSettings(true); return; }
     s.active = svc; s.settingsOpen = false; render(); send('select', svc);
   }
   function other() { return s.active === 'wa' ? 'tg' : 'wa'; }
   function openSettings(on) {
+    if (s.locked) return;
     s.settingsOpen = locked() || (on === undefined ? !s.settingsOpen : on);
     render(); send('settings', s.settingsOpen);
   }
@@ -869,7 +1075,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       var b = e.target.closest('[data-zoom]'); if (b) zoom(z.dataset.zoomFor, +b.dataset.zoom);
     });
   });
-  document.querySelectorAll('.toggle').forEach(function (b) {
+  document.querySelectorAll('.toggle[data-setting]').forEach(function (b) {
     b.addEventListener('click', function () { set(b.dataset.setting, !s[b.dataset.setting]); });
   });
   document.querySelectorAll('[data-choice]').forEach(function (g) {
@@ -912,6 +1118,16 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     d.addEventListener('dblclick', function (e) { if (!e.target.closest('button')) send('window', 'max'); });
   });
   document.addEventListener('keydown', function (e) {
+    if (!document.getElementById('pinSheet').hidden) {
+      if (e.key === 'Escape') closeSheet();
+      return;
+    }
+    if ((s.platform === 'mac' ? e.metaKey : e.ctrlKey) && (e.key === 'l' || e.key === 'L')) {
+      if (s.lockEnabled && !s.locked) send('lock', { op: 'now' });
+      e.preventDefault();
+      return;
+    }
+    if (s.locked) return;
     var mod = s.platform === 'mac' ? e.metaKey : e.altKey;
     if (e.ctrlKey && e.key === 'Tab') { select(other()); e.preventDefault(); }
     else if (mod && !e.ctrlKey && e.key === '1') { select('wa'); e.preventDefault(); }
@@ -927,6 +1143,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     state: function (patch) { Object.assign(s, patch); render(); },
     unread: function (svc, n) { s.unread[svc] = n; render(); },
     update: function (u) { s.update = u; renderUpdate(); },
+    lockResult: lockResult,
     loading: function (svc, on) { document.querySelector('.half[data-svc="' + svc + '"]').classList.toggle('loading', on); },
     strip: function (bg, fg) {
       var st = document.getElementById('strip');
@@ -948,6 +1165,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     if (h.indexOf('mac') >= 0) s.platform = 'mac';
     if (h.indexOf('linux') >= 0) { s.platform = 'linux'; s.decorationLayout = 'appmenu:minimize,maximize,close'; }
     if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example release note\n- Small fixes' };
+    if (h.indexOf('lock') >= 0) { s.lockEnabled = true; }
+    if (h.indexOf('locked') >= 0) { s.locked = true; }
     if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example', required: true };
     s.autostart = true;
     var fill = document.createElement('div');
