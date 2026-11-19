@@ -3,8 +3,9 @@
 WhatsApp Web and Telegram Web in one window, for Windows, macOS and Linux.
 
 - **Windows**: native Go + Microsoft Edge WebView2 app (about 4 MB installer).
-- **macOS and Linux**: Electron app (Chromium), so calls, notifications and call
-  windows behave exactly as on Windows.
+- **macOS**: native Swift + AppKit + WKWebView app (one universal app for Apple
+  Silicon and Intel, about 1 MB; macOS 12 or later).
+- **Linux**: Electron app (Chromium).
 
 All three share the same interface (`ui/shell.html`) and page script
 (`ui/service.js`); the look follows each system: Windows 11, macOS
@@ -31,8 +32,7 @@ Download from [Releases](https://github.com/rashiiddsr/twincxt/releases/latest).
 | System | File | Notes |
 |---|---|---|
 | Windows 10/11 | `Twincxt-Setup-<version>.exe` | Installs per user by default (no admin prompt). Running it over an installed Twincxt offers Update / Repair / Uninstall. |
-| macOS (Apple Silicon) | `Twincxt-<version>-mac-arm64.dmg` | Drag Twincxt to Applications. |
-| macOS (Intel) | `Twincxt-<version>-mac-x64.dmg` | Drag Twincxt to Applications. |
+| macOS 12+ (Apple Silicon and Intel) | `Twincxt-<version>-mac.dmg` | Drag Twincxt to Applications. |
 | Ubuntu, Debian, Mint | `Twincxt-<version>-linux-amd64.deb` | Recommended on these systems: `sudo apt install ./Twincxt-<version>-linux-amd64.deb` |
 | Other Linux | `Twincxt-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. Needs FUSE 2 (`libfuse2`). |
 
@@ -81,7 +81,9 @@ and WhatsApp and Telegram stay locked until it is installed.
 ## Build locally
 
 - Windows: `winget install GoLang.Go JRSoftware.InnoSetup`, then `.\build.ps1 -Version x.y.z`.
-- macOS / Linux: `cd desktop && npm ci && npm run dist:mac` (or `dist:linux`).
+- macOS: `macos/build.sh` (Xcode command line tools only) → `build/mac/Twincxt.app`,
+  `.dmg` and `.zip`.
+- Linux: `cd desktop && npm ci && npm run dist:linux`.
 
 Debugging: `TWINCXT_DEBUG=1` writes `debug.log` in the data folder.
 
@@ -91,7 +93,8 @@ Debugging: `TWINCXT_DEBUG=1` writes `debug.log` in the data folder.
 - Windows: `main.go`, `app.go`, `webview2.go`, `winapi.go`, `updater.go`,
   `notify.go`, `config.go`, `scripts.go`, `installer.iss`, `build.ps1`,
   `gen_icon.py`, `gen_resources.py`.
-- macOS / Linux: `desktop/` (`main.js`, `updater.js`, preloads, electron-builder
+- macOS: `macos/` (`Sources/*.swift`, `Info.plist`, `build.sh`).
+- Linux: `desktop/` (`main.js`, `updater.js`, preloads, electron-builder
   config in `package.json`).
 - Cloud builds: `.github/workflows/mac.yml`, `.github/workflows/linux.yml`.
 
