@@ -112,6 +112,23 @@ jobs:
           grep -q '^SMOKE done' check/app.log
           grep -q 'shell: {"type":"ready"' check/debug.log
 
+      - name: App lock (starts locked with PIN 1234, tries 0000, then 1234)
+        run: |
+          data="$RUNNER_TEMP/twincxt-lock"
+          mkdir -p "$data"
+          echo '{"lockEnabled": true, "lockAfter": 5,
+            "lockSalt": "00112233445566778899aabbccddeeff",
+            "lockHash": "98cd56f19733a361768b76706415776c6f3e161aef907b7e88c5ea3fe5639ab7"}' > "$data/config.json"
+          export TWINCXT_SMOKE=20 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$data" \
+            TWINCXT_SMOKE_SHOT="$PWD/check/lock.png" TWINCXT_UPDATE_DELAY=600
+          timeout 120 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- twincxt > check/lock.log 2>&1 || echo "exit code $?"
+          grep '^SMOKE lock' check/lock.log || true
+          grep 'lock:' "$data/debug.log" | tee check/lock-debug.log
+          grep -q 'lock: unlock refused: Wrong PIN.' check/lock-debug.log
+          grep -q 'lock: unlock ok' check/lock-debug.log
+          grep -q '^SMOKE lock: unlocked' check/lock.log
+          grep -q '"lockFails": 0' "$data/config.json"
+
       - name: Updater check (pretends to be 1.0.0, downloads and verifies the latest release)
         run: |
           export TWINCXT_SMOKE=60 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-upd" \

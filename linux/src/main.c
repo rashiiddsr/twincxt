@@ -8,6 +8,7 @@
 #include <gio/gio.h>
 #include <gio/gdesktopappinfo.h>
 #include <glib/gstdio.h>
+#include <dlfcn.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -910,6 +911,7 @@ static void clear_lock(void) {
 }
 
 static void lock_reply(const char *op, gboolean ok, const char *error) {
+  tw_log("lock: %s %s%s%s", op, ok ? "ok" : "refused", error ? ": " : "", error ? error : "");
   GString *g = g_string_new("twincxt.lockResult({\"op\":");
   json_esc(g, op);
   g_string_append_printf(g, ",\"ok\":%s,\"error\":", ok ? "true" : "false");
@@ -1664,8 +1666,31 @@ static void on_probe(GObject *src, GAsyncResult *res, gpointer name) {
   }
 }
 
-static int smoke_step;
+static int smoke_step, smoke_lock_step;
 static gboolean smoke_next(gpointer d) {
+  // Started locked (CI writes a config with the PIN 1234): a wrong PIN, a
+  // picture of the lock screen, then the right PIN.
+  if (smoke_step == 0 && (app_locked || smoke_lock_step)) {
+    switch (smoke_lock_step++) {
+      case 0:
+        shell_eval("twincxtHost.postMessage(JSON.stringify({type:'lock',data:{op:'unlock',pin:'0000'}}))");
+        g_timeout_add_seconds(2, smoke_next, NULL);
+        return G_SOURCE_REMOVE;
+      case 1:
+        save_shot("locked");
+        shell_eval("twincxtHost.postMessage(JSON.stringify({type:'lock',data:{op:'unlock',pin:'1234'}}))");
+        g_timeout_add_seconds(4, smoke_next, NULL);
+        return G_SOURCE_REMOVE;
+      default:
+        printf("SMOKE lock: %s after the right PIN\n", app_locked ? "still locked" : "unlocked");
+        fflush(stdout);
+        smoke_lock_step = 0;
+        if (app_locked) {
+          app_quit();
+          return G_SOURCE_REMOVE;
+        }
+    }
+  }
   switch (smoke_step++) {
     case 0:
       webkit_web_view_run_javascript(svcs[0].view, PROBE_JS, NULL, on_probe, (gpointer) "wa");
@@ -1735,6 +1760,35 @@ static char *find_ui_dir(void) {
   return found;
 }
 
+// WebKitGTK 2.42+ lists its feature flags; the WebRTC ones are switched on
+// here (and logged). Looked up at run time so 2.40 still works.
+static void enable_rtc_features(void) {
+  typedef gpointer (*all_fn)(void);
+  typedef gsize (*len_fn)(gpointer);
+  typedef gpointer (*get_fn)(gpointer, gsize);
+  typedef const char *(*id_fn)(gpointer);
+  typedef gboolean (*def_fn)(gpointer);
+  typedef void (*set_fn)(WebKitSettings *, gpointer, gboolean);
+  all_fn all = (all_fn)dlsym(RTLD_DEFAULT, "webkit_settings_get_all_features");
+  len_fn len = (len_fn)dlsym(RTLD_DEFAULT, "webkit_feature_list_get_length");
+  get_fn get = (get_fn)dlsym(RTLD_DEFAULT, "webkit_feature_list_get");
+  id_fn ident = (id_fn)dlsym(RTLD_DEFAULT, "webkit_feature_get_identifier");
+  def_fn def = (def_fn)dlsym(RTLD_DEFAULT, "webkit_feature_get_default_value");
+  set_fn set = (set_fn)dlsym(RTLD_DEFAULT, "webkit_settings_set_feature_enabled");
+  if (!all || !len || !get || !ident || !def || !set) return;
+  gpointer list = all();
+  GString *seen = g_string_new(NULL);
+  for (gsize i = 0; list && i < len(list); i++) {
+    gpointer f = get(list, i);
+    const char *id = ident(f);
+    if (!id || !(strstr(id, "RTC") || strstr(id, "PeerConnection") || strstr(id, "MediaStream") || strstr(id, "MediaDevices"))) continue;
+    g_string_append_printf(seen, " %s(%s)", id, def(f) ? "on" : "off");
+    if (strstr(id, "PeerConnection")) set(svc_settings, f, TRUE);
+  }
+  tw_log("WebRTC features:%s", seen->len ? seen->str : " none (built without WebRTC)");
+  g_string_free(seen, TRUE);
+}
+
 static void setup_web(void) {
   WebKitWebsiteDataManager *mgr = webkit_website_data_manager_new("base-data-directory", data_dir, "base-cache-directory", cache_dir, NULL);
   wctx = webkit_web_context_new_with_website_data_manager(mgr);
@@ -1770,7 +1824,9 @@ static void setup_web(void) {
   const char *optional[] = {"enable-webrtc", "enable-media-capabilities", "enable-media", NULL};
   for (int i = 0; optional[i]; i++)
     if (g_object_class_find_property(k, optional[i])) g_object_set(svc_settings, optional[i], TRUE, NULL);
-  tw_log("WebKitGTK %u.%u.%u, user agent %s", webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(), user_agent);
+  tw_log("WebKitGTK %u.%u.%u, user agent %s, enable-webrtc %s", webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version(),
+         user_agent, g_object_class_find_property(k, "enable-webrtc") ? "set" : "not available");
+  enable_rtc_features();
 
   char *js = NULL;
   char *path = g_build_filename(ui_dir, "service.js", NULL);
@@ -1837,11 +1893,16 @@ static void create_window(gboolean autostarted) {
   // Client-side decorations with an empty title bar: the window manager draws
   // none, and the shell's title strip (with GNOME's buttons) is the header bar.
   GtkWidget *bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_style_context_add_class(gtk_widget_get_style_context(bar), "tw-empty");
   gtk_widget_show(bar);
   gtk_window_set_titlebar(GTK_WINDOW(win), bar);
 
+  // Adwaita styles any .titlebar like a header bar (46 px high); this one is empty.
   GtkCssProvider *css = gtk_css_provider_new();
-  gtk_css_provider_load_from_data(css, "window.twincxt { background-color: #EBEBEB; } window.twincxt.dark { background-color: #1A1A1A; }", -1, NULL);
+  gtk_css_provider_load_from_data(css,
+                                  ".titlebar.tw-empty { min-height: 0; padding: 0; margin: 0; border: none; box-shadow: none; background: none; }"
+                                  " window.twincxt { background-color: #EBEBEB; }",
+                                  -1, NULL);
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   g_object_unref(css);
   gtk_style_context_add_class(gtk_widget_get_style_context(win), "twincxt");

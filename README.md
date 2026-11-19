@@ -3,8 +3,10 @@
 WhatsApp Web and Telegram Web in one window, for Windows, macOS and Linux.
 
 - **Windows**: native Go + Microsoft Edge WebView2 app (about 4 MB installer).
-- **macOS and Linux**: Electron app (Chromium), so calls, notifications and call
+- **macOS**: Electron app (Chromium), so calls, notifications and call
   windows behave exactly as on Windows.
+- **Linux**: native C app on GTK 3 and the system's WebKitGTK (`linux/`), so the
+  download is well under 1 MB.
 
 All three share the same interface (`ui/shell.html`) and page script
 (`ui/service.js`); the look follows each system: Windows 11, macOS
@@ -33,8 +35,8 @@ Download from [Releases](https://github.com/rashiiddsr/twincxt/releases/latest).
 | Windows 10/11 | `Twincxt-Setup-<version>.exe` | Installs per user by default (no admin prompt). Running it over an installed Twincxt offers Update / Repair / Uninstall. |
 | macOS (Apple Silicon) | `Twincxt-<version>-mac-arm64.dmg` | Drag Twincxt to Applications. |
 | macOS (Intel) | `Twincxt-<version>-mac-x64.dmg` | Drag Twincxt to Applications. |
-| Ubuntu, Debian, Mint | `Twincxt-<version>-linux-amd64.deb` | Recommended on these systems: `sudo apt install ./Twincxt-<version>-linux-amd64.deb` |
-| Other Linux | `Twincxt-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. Needs FUSE 2 (`libfuse2`). |
+| Ubuntu 22.04+, Debian 12+, Mint 21+ | `Twincxt-<version>-linux-amd64.deb` | Recommended on these systems: `sudo apt install ./Twincxt-<version>-linux-amd64.deb` (also installs the media plugins for calls and the tray library). |
+| Other Linux | `Twincxt-<version>-linux-x86_64.AppImage` | `chmod +x` it and run. Uses the system's WebKitGTK: install `webkit2gtk-4.1` (Fedora `webkit2gtk4.1`, Arch `webkit2gtk-4.1`) and GStreamer's good/bad/libav plugins. |
 
 **macOS, first start.** Twincxt is not signed with an Apple Developer ID, so
 macOS asks once: open it from Applications, then go to
@@ -42,8 +44,8 @@ macOS asks once: open it from Applications, then go to
 installed by Twincxt itself do not ask again. If macOS says the app "is damaged",
 run `xattr -dr com.apple.quarantine /Applications/Twincxt.app` once.
 
-**Linux AppImage on Ubuntu 24.04+.** Ubuntu restricts the browser sandbox for
-programs outside the package manager; use the `.deb` there.
+**Linux tray.** GNOME shows the tray icon only with the AppIndicator extension
+(on by default in Ubuntu); without a tray, "Keep in tray" minimizes instead.
 
 Logins and settings are kept outside the program folder (Windows
 `%APPDATA%\Twincxt`, macOS `~/Library/Application Support/Twincxt`, Linux
@@ -81,7 +83,10 @@ and WhatsApp and Telegram stay locked until it is installed.
 ## Build locally
 
 - Windows: `winget install GoLang.Go JRSoftware.InnoSetup`, then `.\build.ps1 -Version x.y.z`.
-- macOS / Linux: `cd desktop && npm ci && npm run dist:mac` (or `dist:linux`).
+- macOS: `cd desktop && npm ci && npm run dist:mac`.
+- Linux: install `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+  libsoup-3.0-dev`, then `make -C linux` (`make -C linux run` starts it);
+  `linux/package.sh` makes the .deb and AppImage (needs ImageMagick and appimagetool).
 
 Debugging: `TWINCXT_DEBUG=1` writes `debug.log` in the data folder.
 
@@ -91,8 +96,10 @@ Debugging: `TWINCXT_DEBUG=1` writes `debug.log` in the data folder.
 - Windows: `main.go`, `app.go`, `webview2.go`, `winapi.go`, `updater.go`,
   `notify.go`, `config.go`, `scripts.go`, `installer.iss`, `build.ps1`,
   `gen_icon.py`, `gen_resources.py`.
-- macOS / Linux: `desktop/` (`main.js`, `updater.js`, preloads, electron-builder
+- macOS: `desktop/` (`main.js`, `updater.js`, preloads, electron-builder
   config in `package.json`).
+- Linux: `linux/` (`src/main.c` window and pages, `src/updater.c`, `src/applock.c`,
+  `src/tray.c`, `Makefile`, `package.sh`).
 - Cloud builds: `.github/workflows/mac.yml`, `.github/workflows/linux.yml`.
 
 ## Credits
