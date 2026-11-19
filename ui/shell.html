@@ -119,6 +119,7 @@
   --stroke-strong: #CFCFD4;
   --accent: #3584E4;
   --accent-text: #FFFFFF;
+  --strip-h: 46px;
 }
 :root[data-platform="linux"][data-theme="dark"] {
   --side: #2E2E32;
@@ -295,6 +296,15 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
    lights and Linux its window manager's title bar. */
 :root[data-platform="mac"] .win, :root[data-platform="linux"] .win { display: none; }
 :root[data-platform="mac"] .zoom, :root[data-platform="linux"] .zoom { margin-right: 12px; }
+/* Linux: the strip is the window's header bar (client-side decorations), so it
+   carries GNOME's round window buttons, in the order the desktop asks for. */
+.gwin { display: none; align-items: center; gap: 12px; padding-right: 12px; }
+:root[data-platform="linux"] .gwin { display: flex; }
+.gwin:empty { display: none !important; }
+.gwin button { width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, currentColor 10%, transparent); }
+.gwin button:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
+.gwin button:active { background: color-mix(in srgb, currentColor 24%, transparent); }
+.gwin svg.i { width: 10px; height: 10px; stroke-width: 1.8; }
 
 /* ---------- content ---------- */
 .content { position: relative; background: var(--strip); min-width: 0; min-height: 0; }
@@ -447,6 +457,11 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></symbol>
   <symbol id="i-update" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-gmin" viewBox="0 0 10 10"><path d="M1.5 5h7"/></symbol>
+  <symbol id="i-gmax" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-gres" viewBox="0 0 10 10"><rect x="1.5" y="3" width="5.5" height="5.5" rx="1"/><path d="M3.5 3V1.5h5v5H7"/></symbol>
+  <symbol id="i-gclose" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2 2 8"/></symbol>
   <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
 </svg>
 <div class="app" id="app" data-active="wa">
@@ -491,6 +506,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       <button data-win="max" title="Maximize" id="maxBtn">&#xE922;</button>
       <button data-win="close" class="close" title="Close">&#xE8BB;</button>
     </div>
+    <div class="gwin no-drag" id="gwin"></div>
   </header>
 
   <main class="content">
@@ -580,6 +596,35 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
           </div>
         </div>
 
+        <div class="group-title">Privacy</div>
+        <div class="cards">
+          <div class="card">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-eye"/></svg></span>
+            <div class="card-text"><div class="card-title">Blur messages</div></div>
+            <button class="toggle" role="switch" data-setting="blurMessages"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"></span>
+            <div class="card-text"><div class="card-title">Blur chat previews</div></div>
+            <button class="toggle" role="switch" data-setting="blurPreviews"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"></span>
+            <div class="card-text"><div class="card-title">Blur names</div></div>
+            <button class="toggle" role="switch" data-setting="blurNames"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"></span>
+            <div class="card-text"><div class="card-title">Blur profile photos</div></div>
+            <button class="toggle" role="switch" data-setting="blurPhotos"><span class="state"></span><span class="track"></span></button>
+          </div>
+          <div class="card">
+            <span class="glyph" aria-hidden="true"></span>
+            <div class="card-text"><div class="card-title">Blur photos and videos</div></div>
+            <button class="toggle" role="switch" data-setting="blurMedia"><span class="state"></span><span class="track"></span></button>
+          </div>
+        </div>
+
         <div class="group-title">Accounts</div>
         <div class="cards">
           <div class="card">
@@ -639,6 +684,9 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     autostart: false, startHidden: false, closeAction: 'tray',
     notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
     autoUpdate: true,
+    blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
+    // Linux: GNOME's button layout (org.gnome.desktop.wm.preferences button-layout).
+    decorationLayout: 'appmenu:close',
     // status: idle | checking | latest | available | downloading | ready | installing | error
     update: { status: 'idle', version: '', progress: 0, notes: '', error: '' }
   };
@@ -724,6 +772,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     document.getElementById('serviceView').hidden = s.settingsOpen;
     document.getElementById('settingsView').hidden = !s.settingsOpen;
     document.getElementById('settingsBtn').setAttribute('aria-pressed', String(s.settingsOpen));
+    if (s.platform === 'linux') renderGnomeButtons();
     document.getElementById('maxBtn').innerHTML = s.maximized ? '&#xE923;' : '&#xE922;';
     document.getElementById('maxBtn').title = s.maximized ? 'Restore' : 'Maximize';
     document.getElementById('zoomVal').textContent = s.zoom[s.active] + '%';
@@ -745,8 +794,51 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       });
     });
     renderUpdate();
+    requestAnimationFrame(sendRegions);
     document.title = s.settingsOpen ? 'Settings - Twincxt' : NAMES[s.active] + ' - Twincxt';
   }
+
+  var gnomeKey = '';
+  function renderGnomeButtons() {
+    var names = String(s.decorationLayout || '').replace(/:/g, ',').split(',')
+      .map(function (n) { return n.trim(); })
+      .filter(function (n) { return n === 'minimize' || n === 'maximize' || n === 'close'; });
+    var key = names.join(',') + '|' + s.maximized;
+    if (key === gnomeKey) return;
+    gnomeKey = key;
+    var box = document.getElementById('gwin');
+    box.innerHTML = '';
+    names.forEach(function (n) {
+      var b = document.createElement('button');
+      var icon = n === 'minimize' ? 'i-gmin' : n === 'close' ? 'i-gclose' : (s.maximized ? 'i-gres' : 'i-gmax');
+      b.dataset.win = n === 'minimize' ? 'min' : n === 'maximize' ? 'max' : 'close';
+      b.title = n === 'minimize' ? 'Minimize' : n === 'close' ? 'Close' : (s.maximized ? 'Restore' : 'Maximize');
+      b.innerHTML = '<svg class="i" aria-hidden="true"><use href="#' + icon + '"/></svg>';
+      b.addEventListener('click', function () { send('window', b.dataset.win); });
+      box.appendChild(b);
+    });
+  }
+
+  // macOS: WKWebView has no CSS drag regions, so the host is told where the
+  // window can be dragged (the title strip and the corner above the sidebar)
+  // and where it cannot (the buttons inside them). CSS pixels, top-left origin.
+  var regionsKey = '';
+  function sendRegions() {
+    if (s.platform !== 'mac' || !host) return;
+    function rect(el) { var r = el.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; }
+    var drag = [], nodrag = [];
+    document.querySelectorAll('.drag-area').forEach(function (d) {
+      if (d.offsetParent === null && getComputedStyle(d).position !== 'fixed') return;
+      drag.push(rect(d));
+      d.querySelectorAll('button').forEach(function (b) { if (b.offsetParent !== null) nodrag.push(rect(b)); });
+    });
+    var data = { drag: drag, nodrag: nodrag };
+    var key = JSON.stringify(data);
+    if (key === regionsKey) return;
+    regionsKey = key;
+    send('regions', data);
+  }
+  window.addEventListener('resize', function () { sendRegions(); });
 
   function locked() { return !!(s.update && s.update.required); }
   function select(svc) {
@@ -854,7 +946,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     if (h.indexOf('settings') >= 0) s.settingsOpen = true;
     if (h.indexOf('tg') >= 0) s.active = 'tg';
     if (h.indexOf('mac') >= 0) s.platform = 'mac';
-    if (h.indexOf('linux') >= 0) s.platform = 'linux';
+    if (h.indexOf('linux') >= 0) { s.platform = 'linux'; s.decorationLayout = 'appmenu:minimize,maximize,close'; }
     if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example release note\n- Small fixes' };
     if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example', required: true };
     s.autostart = true;

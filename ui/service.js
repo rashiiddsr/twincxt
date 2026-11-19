@@ -1,9 +1,9 @@
 // Injected into every WhatsApp / Telegram document before the page's own code.
-// Shared by Windows (WebView2) and macOS/Linux (Electron). The host replaces
+// Shared by Windows (WebView2), macOS (WKWebView) and Linux (WebKitGTK). The host replaces
 // the service id and the call-window flag below.
 (function () {
   var SVC = '__SVC__';
-  // WebView2 on Windows, the Electron preload bridge on macOS and Linux.
+  // WebView2 on Windows; on macOS and Linux the host defines window.twincxtBridge.
   var bridge = (window.chrome && window.chrome.webview) || window.twincxtBridge || null;
   function post(o) {
     try { if (bridge) bridge.postMessage(JSON.stringify(o)); } catch (e) {}
@@ -53,6 +53,62 @@
   }
 
   if (window.top !== window || __POPUP__) return;
+
+  // ---- privacy blur ----------------------------------------------------------
+  // Blurs parts of the page until the pointer is over them. The host calls
+  // window.twincxtPrivacy({ blurMessages, blurPreviews, blurNames, blurPhotos,
+  // blurMedia }) after every page load and whenever a setting changes; the last
+  // value is kept in this site's localStorage so the blur is applied from the
+  // first paint of the next load.
+  var BLUR = {
+    wa: {
+      blurMessages: '#main .copyable-text, #main .selectable-text, #main .quoted-mention',
+      blurPreviews: '#pane-side span[title]:not([dir="auto"]), #pane-side span[dir="ltr"]',
+      blurNames: '#pane-side span[dir="auto"][title], #main header span[dir="auto"], #main .message-in span[aria-label][dir="auto"]',
+      blurPhotos: 'img[src*="pps.whatsapp.net"], #pane-side [role="gridcell"] img, #main header img',
+      blurMedia: '#main img[src^="blob:"], #main img[src^="data:"], #main video, #main [data-testid*="media"], #main canvas'
+    },
+    tg: {
+      blurMessages: '.Message .text-content, .Message .message-content .text, .bubble .message, .bubble .reply-subtitle',
+      blurPreviews: '.ListItem .last-message, .ListItem .subtitle, .chatlist-chat .row-subtitle, .chatlist-chat .dialog-subtitle',
+      blurNames: '.ListItem .fullName, .ListItem .title h3, .MiddleHeader .fullName, .chatlist-chat .peer-title, .chat-info .peer-title, .message-title-name',
+      blurPhotos: '.Avatar, .avatar, .avatar-like, .chat-info .avatar',
+      blurMedia: '.Message .media-inner, .Message .Photo, .Message .Video, .Message video, .bubble .media-container, .bubble .media-photo, .bubble video, .bubble .media-video'
+    }
+  }[SVC] || {};
+  var privacyStyle = null;
+  function applyPrivacy(p) {
+    p = p || {};
+    var parts = [];
+    Object.keys(BLUR).forEach(function (k) {
+      if (!p[k]) return;
+      parts.push(BLUR[k].split(',').map(function (s) {
+        s = s.trim();
+        return s + ':not(:hover)';
+      }).join(',\n') + ' { filter: blur(7px) !important; transition: filter .12s ease !important; }');
+    });
+    if (!privacyStyle) {
+      privacyStyle = document.createElement('style');
+      privacyStyle.id = 'twincxt-privacy';
+    }
+    privacyStyle.textContent = parts.join('\n');
+    var parent = document.head || document.documentElement;
+    if (parent && privacyStyle.parentNode !== parent) parent.appendChild(privacyStyle);
+  }
+  window.twincxtPrivacy = function (p) {
+    try { localStorage.setItem('twincxt-privacy', JSON.stringify(p || {})); } catch (e) {}
+    applyPrivacy(p);
+  };
+  try { applyPrivacy(JSON.parse(localStorage.getItem('twincxt-privacy') || '{}')); } catch (e) {}
+  // The page may replace <head>; put the style back if it goes.
+  document.addEventListener('DOMContentLoaded', function () {
+    var p = {};
+    try { p = JSON.parse(localStorage.getItem('twincxt-privacy') || '{}'); } catch (e) {}
+    applyPrivacy(p);
+    new MutationObserver(function () {
+      if (privacyStyle && !privacyStyle.isConnected) (document.head || document.documentElement).appendChild(privacyStyle);
+    }).observe(document.documentElement, { childList: true });
+  });
 
   // ---- call windows only on request -----------------------------------------
   // WhatsApp opens its call window as soon as a call starts. In Twincxt the
