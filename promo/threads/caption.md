@@ -16,7 +16,7 @@ gais, aku bikin aplikasi buat buka WhatsApp sama Telegram dalam satu jendela, na
 
 gratis, ada buat Windows, macOS, sama Linux. nggak perlu bolak-balik tab browser lagi, tinggal Ctrl+Tab
 
-dan ya, ini juga hasil vibecoding 😭 ceritanya di thread 🧵👇
+ceritanya di thread 🧵👇
 
 ## Post 2: fitur
 
@@ -38,7 +38,7 @@ tampilannya juga ngikutin OS-nya, gaya Windows 11, macOS, sama GNOME. update ber
 
 Twincxt nggak muncul dari nol ya. aku kembangin dari whatsapp-web.view bikinan Adytm404, aplikasi WhatsApp Web ringan buat Windows. kredit penuh buat yang bikin 🙏
 
-dari situ aku tambahin Telegram, sidebar dua bagian, blur chat, updater, terus bikin versi macOS sama Linux. vibecoding: aku yang nentuin, ngetes, sama mutusin, AI bantu nulis kodenya
+dari situ aku kembangin: tambah Telegram, sidebar dua bagian, blur chat, updater, terus bikin versi macOS sama Linux
 
 ## Post 5: link
 
@@ -54,7 +54,7 @@ gais, aku bikin Twincxt: WhatsApp sama Telegram dalam satu jendela 💬 gratis, 
 
 pindah tinggal Ctrl+Tab, chat bisa di-blur biar nggak keintip, video call tetap di jendela utama, ukurannya kecil
 
-dikembangin dari whatsapp-web.view bikinan Adytm404 (kredit buat dia 🙏), dibikin dengan vibecoding
+dikembangin dari whatsapp-web.view bikinan Adytm404 (kredit buat dia 🙏)
 
 download di github.com/rashiiddsr/twincxt
 
@@ -67,5 +67,5 @@ download di github.com/rashiiddsr/twincxt
 3. Twincxt dengan chat yang di-blur kecuali satu chat yang ditunjuk kursor, tulisan "Chat kamu, nggak keintip."
 4. Jendela video call terpisah di atas jendela utama Twincxt, tulisan "Video call tetap di jendela utama."
 5. Pengaturan Twincxt di Windows, macOS, dan Linux beserta ukuran filenya.
-6. Cerita di balik Twincxt: dibikin dengan vibecoding, dikembangin dari whatsapp-web.view bikinan Adytm404.
+6. Cerita di balik Twincxt: dikembangin dari whatsapp-web.view bikinan Adytm404.
 7. Download Twincxt gratis di github.com/rashiiddsr/twincxt, untuk Windows, macOS, Linux.
