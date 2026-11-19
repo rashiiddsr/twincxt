@@ -112,9 +112,9 @@ jobs:
           grep -q '^SMOKE done' check/app.log
           grep -q 'shell: {"type":"ready"' check/debug.log
 
-      - name: App lock (starts locked with PIN 1234, tries 0000, then 1234)
+      - name: Second start and app lock (PIN 1234 in config; tries 0000, then 1234)
         run: |
-          # Control: the same start with a written config and no lock.
+          # A start with an existing config.json (a second launch), no lock.
           ctl="$RUNNER_TEMP/twincxt-ctl"
           mkdir -p "$ctl"
           echo '{"lockEnabled": false, "lockAfter": 5}' > "$ctl/config.json"
@@ -122,6 +122,7 @@ jobs:
             timeout 90 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- twincxt > check/control.log 2>&1 || true
           grep -v '"type":"frame"' "$ctl/debug.log" > check/control-debug.log || true
           head -n 14 check/control-debug.log
+          grep -q 'shell: {"type":"ready"' check/control-debug.log
           data="$RUNNER_TEMP/twincxt-lock"
           mkdir -p "$data"
           echo '{"lockEnabled": true, "lockAfter": 5,
@@ -220,6 +221,10 @@ jobs:
           grep '^SMOKE' check/app-24.04.log || true
           tail -n 40 check/app-24.04.log
           grep -q '^SMOKE done' check/app-24.04.log
+          # Second start, now with the config.json the first one saved.
+          TWINCXT_SMOKE=12 TWINCXT_SMOKE_SHOT="$PWD/check/linux-24.04-second.png" \
+            timeout 90 xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- twincxt > check/app-24.04-second.log 2>&1 || true
+          grep -c 'shell: {"type":"ready"' "$RUNNER_TEMP/twincxt-data/debug.log" | grep -qx 2
 
       - name: Upload the check
         if: always()

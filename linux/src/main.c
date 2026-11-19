@@ -2030,6 +2030,11 @@ static void start(gboolean autostarted) {
   }
   started = TRUE;
   tw_log("Twincxt %s starting (ui %s)", TWINCXT_VERSION, ui_dir);
+  // WebKit first: a JavaScriptCore context (used for JSON) created before
+  // WebKit's own start stalls WebKit's process messaging, so the config is
+  // read only now.
+  setup_web();
+  load_config();
   cfg.autostart = autostart_enabled();
   if (cfg.autostart) set_autostart(TRUE);  // keep the path current (moved AppImage, deb upgrade)
   read_decoration_layout();
@@ -2038,7 +2043,6 @@ static void start(gboolean autostarted) {
   char *icon = g_build_filename(ui_dir, "icons", "app.png", NULL);
   tray_init(gtk_icon_theme_has_icon(gtk_icon_theme_get_default(), "twincxt") ? "twincxt" : icon);
   g_free(icon);
-  setup_web();
   if (cfg.lockEnabled && *cfg.lockHash) app_locked = TRUE;  // locked from the first frame
   g_timeout_add_seconds(15, on_lock_timer, NULL);
   update_tray_lock();
@@ -2077,7 +2081,7 @@ int main(int argc, char **argv) {
   }
   if (g_getenv("TWINCXT_SELFTEST")) return pin_selftest();
   init_paths();
-  load_config();
+  cfg_defaults();
   ui_dir = find_ui_dir();
   if (!ui_dir) {
     fprintf(stderr, "twincxt: can't find ui/shell.html next to the program or in /usr/share/twincxt/ui\n");
