@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Twincxt
+GenericName=Messenger
+Comment=WhatsApp and Telegram in one window
+Exec=twincxt
+Icon=twincxt
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=WhatsApp;Telegram;chat;messages;messenger;
+StartupNotify=true
+StartupWMClass=twincxt
+X-GNOME-UsesNotifications=true

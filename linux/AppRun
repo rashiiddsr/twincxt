@@ -1,0 +1,5 @@
+#!/bin/sh
+# Twincxt AppImage: the program and its ui/ folder only; WebKitGTK and GTK come
+# from the system (libwebkit2gtk-4.1-0).
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/twincxt" "$@"
