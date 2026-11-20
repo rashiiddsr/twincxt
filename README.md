@@ -5,7 +5,8 @@ WhatsApp Web and Telegram Web in one window, for Windows, macOS and Linux.
 - **Windows**: native Go + Microsoft Edge WebView2 app (about 4 MB installer).
 - **macOS**: native Swift + AppKit + WKWebView app (one universal app for Apple
   Silicon and Intel, about 1 MB; macOS 12 or later).
-- **Linux**: Electron app (Chromium).
+- **Linux**: Electron app (Chromium). The system's WebKitGTK has no WebRTC on
+  Ubuntu, so calls need Chromium's.
 
 All three share the same interface (`ui/shell.html`) and page script
 (`ui/service.js`); the look follows each system: Windows 11, macOS
@@ -23,6 +24,10 @@ All three share the same interface (`ui/shell.html`) and page script
   `Ctrl+,` (macOS `⌘,`).
 - Settings: theme, zoom per service, open at sign-in, start hidden, close to tray,
   notifications, Telegram Web A/K, reload or sign out per service, updates.
+- Privacy: blur messages, chat previews, names, profile photos and media until
+  you point at them.
+- App lock: a PIN (stored as a PBKDF2 hash) on start or after 1, 5 or 15
+  minutes away; "Forgot PIN?" signs out of both services and removes it.
 - Built-in updater (below).
 
 ## Install
@@ -71,7 +76,7 @@ and WhatsApp and Telegram stay locked until it is installed.
 
 ## Releasing
 
-1. Set the version in `desktop/package.json` and pass it to `build.ps1`.
+1. Set the version in `VERSION` and `desktop/package.json`, and pass it to `build.ps1`.
 2. Windows (on the PC): `.\build.ps1 -Version x.y.z` → `dist\Twincxt-Setup-x.y.z.exe`
    and `dist\SHA256SUMS-windows.txt`.
 3. Push the tag `vx.y.z`: GitHub Actions builds macOS (`.github/workflows/mac.yml`)

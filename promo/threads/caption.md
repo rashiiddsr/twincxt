@@ -6,7 +6,7 @@ gambarnya; post 2 sampai 5 dibalas di bawahnya sebagai thread.
 
 Gambar dibuat dari `slides.html`. Untuk membuat ulang satu slide: buka `slides.html?n=<nomor>` di
 Edge/Chrome headless dengan ukuran jendela 1080×1350 (`--allow-file-access-from-files`). Ukuran file
-di slide 5 diisi lewat `&mac=<MB>&linux=<MB>&win=<MB>`.
+di slide 5 bisa diganti lewat `&mac=<MB>&linux=<MB>&win=<MB>`.
 
 ---
 
@@ -30,7 +30,7 @@ yang bikin aku betah pake sendiri:
 
 ## Post 3: ringan
 
-ukurannya kecil karena nggak bawa browser sendiri. Twincxt pake mesin browser bawaan tiap OS: WebView2 di Windows, WebKit di macOS, WebKitGTK di Linux
+di Windows sama macOS ukurannya kecil banget (4 MB sama 0,5 MB) karena pake mesin browser bawaan sistem. di Linux bawa Chromium sendiri biar video call tetap jalan
 
 tampilannya juga ngikutin OS-nya, gaya Windows 11, macOS, sama GNOME. update berikutnya masuk sendiri dari dalam aplikasi
 
@@ -44,7 +44,7 @@ dari situ aku kembangin: tambah Telegram, sidebar dua bagian, blur chat, updater
 
 mau coba? download di github.com/rashiiddsr/twincxt (bagian Releases, pilih sesuai OS)
 
-catatan: ini bukan aplikasi resmi WhatsApp, Meta, atau Telegram ya. di Linux, panggilan suara/video tergantung distro. nemu bug atau mau request fitur, komen aja di sini 🙌
+catatan: ini bukan aplikasi resmi WhatsApp, Meta, atau Telegram ya. nemu bug atau mau request fitur, komen aja di sini 🙌
 
 ---
 
