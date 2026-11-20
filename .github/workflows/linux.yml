@@ -78,7 +78,7 @@ jobs:
       - name: Start it
         run: |
           chmod +x desktop/dist/Twincxt-*.AppImage
-          export TWINCXT_SMOKE=40 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-data" APPIMAGE_EXTRACT_AND_RUN=1
+          export TWINCXT_SMOKE=40 TWINCXT_DEBUG=1 TWINCXT_SELFTEST=1 TWINCXT_USERDATA="$RUNNER_TEMP/twincxt-data" APPIMAGE_EXTRACT_AND_RUN=1
           # The test runs without the Chromium sandbox (CI containers do not allow it);
           # installed from the .deb, Twincxt uses the sandbox.
           xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
@@ -89,6 +89,19 @@ jobs:
           '
           echo "--- app output"; tail -n 40 app.log || true
           echo "--- debug log"; cat "$RUNNER_TEMP/twincxt-data/debug.log" || true
+
+      - name: Start it with the app lock on
+        run: |
+          d="$RUNNER_TEMP/twincxt-locked"; mkdir -p "$d"
+          printf '%s' '{"lockEnabled":true,"lockHash":"98cd56f19733a361768b76706415776c6f3e161aef907b7e88c5ea3fe5639ab7","lockSalt":"00112233445566778899aabbccddeeff"}' > "$d/config.json"
+          export TWINCXT_SMOKE=25 TWINCXT_DEBUG=1 TWINCXT_USERDATA="$d" APPIMAGE_EXTRACT_AND_RUN=1
+          xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
+            "$(ls desktop/dist/Twincxt-*.AppImage)" --no-sandbox > app-locked.log 2>&1 &
+            sleep 18
+            import -window root linux-locked.png
+            wait || true
+          '
+          cat "$d/debug.log" || true
 
       - name: Checksums
         run: |
@@ -113,7 +126,9 @@ jobs:
           name: Twincxt-Linux-check
           path: |
             linux-window.png
+            linux-locked.png
             app.log
+            app-locked.log
           if-no-files-found: ignore
 
       - name: Attach to the release

@@ -1,5 +1,6 @@
-// Twincxt for macOS and Linux (Electron). The Windows app (Go + WebView2)
-// does the same; both share ui/shell.html and ui/service.js.
+// Twincxt for Linux (Electron). Windows (Go + WebView2) and macOS (Swift +
+// WKWebView, macos/) do the same; all share ui/shell.html and ui/service.js.
+// Linux keeps Chromium because the system WebKitGTK has no WebRTC (calls).
 //
 // Layout: one window. The shell (sidebar, title strip, settings) covers it;
 // the WhatsApp and Telegram views sit in the content area on top of it.
@@ -9,6 +10,8 @@ const {
   nativeTheme, nativeImage, shell, session, systemPreferences, screen, clipboard,
 } = require('electron');
 const fs = require('fs');
+const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const path = require('path');
 const os = require('os');
 const { Updater } = require('./updater');
@@ -16,7 +19,7 @@ const { Updater } = require('./updater');
 const IS_MAC = process.platform === 'darwin';
 const PLATFORM = IS_MAC ? 'mac' : 'linux';
 const SIDE_W = 76;
-const STRIP_H = IS_MAC ? 38 : 36;
+const STRIP_H = IS_MAC ? 38 : 46; // Linux: the strip is a GNOME header bar
 const MIN_W = 960;
 const MIN_H = 620;
 const WARM_MS = 10 * 60 * 1000;
@@ -40,6 +43,8 @@ const DEFAULTS = {
   autostart: false, startHidden: false, closeAction: 'tray',
   notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
   autoUpdate: true, skippedVersion: '',
+  blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
+  lockEnabled: false, lockHash: '', lockSalt: '', lockAfter: 5, lockFails: 0, lockUntil: 0,
   window: { x: 0, y: 0, w: 1240, h: 800, maximized: false },
 };
 let cfg = loadConfig();
@@ -54,6 +59,8 @@ function loadConfig() {
   if (!['toast', 'attention', 'both'].includes(c.notifyMode)) c.notifyMode = 'toast';
   if (!['a', 'k'].includes(c.telegramVersion)) c.telegramVersion = 'a';
   for (const k of ['zoomWa', 'zoomTg']) if (!(c[k] >= 50 && c[k] <= 200)) c[k] = 100;
+  if (![0, 1, 5, 15].includes(c.lockAfter)) c.lockAfter = 5;
+  if (c.lockEnabled && !c.lockHash) c.lockEnabled = false;
   return c;
 }
 
@@ -79,6 +86,9 @@ let tray = null;
 let quitting = false;
 let settingsOpen = false;
 let locked = false; // a required update must be installed first
+let appLocked = false; // the app lock screen is showing
+let awaySince = 0;
+let lastMaxToggle = 0;
 let fullSvc = '';
 let updater = null;
 const svcs = {
@@ -150,9 +160,39 @@ function pushState() {
     notifyMode: cfg.notifyMode,
     telegramVersion: cfg.telegramVersion,
     autoUpdate: cfg.autoUpdate,
+    blurMessages: cfg.blurMessages,
+    blurPreviews: cfg.blurPreviews,
+    blurNames: cfg.blurNames,
+    blurPhotos: cfg.blurPhotos,
+    blurMedia: cfg.blurMedia,
+    lockEnabled: cfg.lockEnabled,
+    locked: appLocked,
+    lockAfter: cfg.lockAfter,
+    decorationLayout: DECORATION_LAYOUT,
     maximized: !!win && win.isMaximized(),
     settingsOpen,
   }) + ')');
+}
+
+// GNOME's window button layout, for the header bar buttons the shell draws.
+const DECORATION_LAYOUT = (() => {
+  if (IS_MAC) return '';
+  try {
+    const v = execFileSync('gsettings', ['get', 'org.gnome.desktop.wm.preferences', 'button-layout'],
+      { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().replace(/^'|'$/g, '');
+    if (v) return v;
+  } catch (_) { /* not GNOME */ }
+  return 'appmenu:minimize,maximize,close';
+})();
+
+const BLUR_KEYS = ['blurMessages', 'blurPreviews', 'blurNames', 'blurPhotos', 'blurMedia'];
+// Hands the blur settings to a service page (ui/service.js keeps them in the
+// site's localStorage so the next load is blurred from the start).
+function pushPrivacy(s) {
+  if (!s || !s.view) return;
+  const p = {};
+  for (const k of BLUR_KEYS) p[k] = !!cfg[k];
+  s.view.webContents.executeJavaScript('window.twincxtPrivacy && window.twincxtPrivacy(' + JSON.stringify(p) + ')').catch(() => {});
 }
 
 function pushUnread(s) {
@@ -165,7 +205,7 @@ function pushUnread(s) {
 
 function applyStrip() {
   const s = svcs[cfg.active];
-  if (settingsOpen || !s.strip) return shellEval("twincxt.strip('', '')");
+  if (settingsOpen || appLocked || !s.strip) return shellEval("twincxt.strip('', '')");
   const { r, g, b } = s.strip;
   const dark = (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5;
   shellEval(`twincxt.strip(${JSON.stringify(`rgb(${r},${g},${b})`)},${JSON.stringify(dark ? '#D1D7DB' : '#3B4A54')})`);
@@ -191,7 +231,7 @@ function layout() {
     if (!s.view) continue;
     const full = fullSvc === id;
     s.view.setBounds(full ? { x: 0, y: 0, width: w, height: h } : { x: SIDE_W, y: STRIP_H, width: Math.max(0, w - SIDE_W), height: Math.max(0, h - STRIP_H) });
-    const onTop = (!settingsOpen && id === cfg.active) || full;
+    const onTop = !appLocked && ((!settingsOpen && id === cfg.active) || full);
     if (onTop) {
       s.leftAt = 0;
       setCold(s, false);
@@ -227,7 +267,7 @@ setInterval(() => {
 }, Math.min(60000, WARM_MS / 2));
 
 function focusActive() {
-  if (settingsOpen) return shellView && shellView.webContents.focus();
+  if (settingsOpen || appLocked) return shellView && shellView.webContents.focus();
   const s = svcs[cfg.active];
   if (s.view) s.view.webContents.focus();
 }
@@ -289,7 +329,7 @@ function createWindow() {
     backgroundColor: isDark() ? '#1A1A1A' : '#EBEBEB',
     ...(IS_MAC
       ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 14, y: 13 } }
-      : { autoHideMenuBar: true, icon: path.join(UI, 'icons', 'app.png') }),
+      : { frame: false, autoHideMenuBar: true, icon: path.join(UI, 'icons', 'app.png') }),
   });
 
   shellView = new WebContentsView({
@@ -304,9 +344,12 @@ function createWindow() {
   for (const id of ['wa', 'tg']) createService(svcs[id]);
 
   win.on('resize', () => { layout(); pushState(); });
-  win.on('maximize', pushState);
-  win.on('unmaximize', pushState);
-  win.on('focus', () => { win.flashFrame(false); focusActive(); });
+  win.on('maximize', () => { lastMaxToggle = Date.now(); pushState(); });
+  win.on('unmaximize', () => { lastMaxToggle = Date.now(); pushState(); });
+  win.on('focus', () => { win.flashFrame(false); checkAway(); awaySince = 0; focusActive(); });
+  win.on('blur', () => { if (!awaySince) awaySince = Date.now(); });
+  win.on('minimize', () => { if (!awaySince) awaySince = Date.now(); });
+  win.on('hide', () => { if (!awaySince) awaySince = Date.now(); });
   win.on('close', (e) => {
     saveBounds();
     if (!quitting && cfg.closeAction === 'tray') {
@@ -321,6 +364,7 @@ function createWindow() {
     if (!quitting) { quitting = true; app.quit(); }
   });
 
+  if (cfg.lockEnabled) appLocked = true;
   layout();
   const autostarted = process.argv.includes('--autostart') || (IS_MAC && app.getLoginItemSettings().wasOpenedAtLogin);
   if (!(autostarted && cfg.startHidden)) {
@@ -358,7 +402,7 @@ function createService(s) {
   wc.setUserAgent(USER_AGENT);
   wc.setVisualZoomLevelLimits(1, 1); // no pinch zoom
   wc.setZoomFactor((s.id === 'wa' ? cfg.zoomWa : cfg.zoomTg) / 100);
-  wc.on('did-finish-load', () => wc.setZoomFactor((s.id === 'wa' ? cfg.zoomWa : cfg.zoomTg) / 100));
+  wc.on('did-finish-load', () => { wc.setZoomFactor((s.id === 'wa' ? cfg.zoomWa : cfg.zoomTg) / 100); pushPrivacy(s); });
   configurePage(wc, s.id);
 
   wc.on('page-title-updated', (_e, title) => {
@@ -486,6 +530,15 @@ function onKey(e, input) {
   const mod = IS_MAC ? input.meta : input.alt;
   const settingsMod = IS_MAC ? input.meta : input.control;
   let handled = true;
+  if ((IS_MAC ? input.meta : input.control) && !input.alt && !input.shift && input.key.toLowerCase() === 'l') {
+    lockNow();
+    e.preventDefault();
+    return;
+  }
+  if (appLocked) {
+    if ((input.control && input.key === 'Tab') || (mod && (input.key === '1' || input.key === '2')) || (settingsMod && input.key === ',')) e.preventDefault();
+    return;
+  }
   if (input.control && input.key === 'Tab') selectService(cfg.active === 'wa' ? 'tg' : 'wa', 'Ctrl+Tab');
   else if (mod && !input.control && input.key === '1') selectService('wa', 'shortcut');
   else if (mod && !input.control && input.key === '2') selectService('tg', 'shortcut');
@@ -516,6 +569,7 @@ ipcMain.on('shell-msg', (_e, raw) => {
     case 'zoom': setZoom(m.data.svc, m.data.value); break;
     case 'set': setOption(m.data.key, m.data.value); break;
     case 'action': runAction(String(m.data)); break;
+    case 'lock': onLockMessage(m.data || {}); break;
     case 'update':
       if (m.data === 'check') updater.check(true);
       else if (m.data === 'install') updater.install();
@@ -523,7 +577,11 @@ ipcMain.on('shell-msg', (_e, raw) => {
       break;
     case 'window':
       if (m.data === 'min') win.minimize();
-      else if (m.data === 'max') win.isMaximized() ? win.unmaximize() : win.maximize();
+      else if (m.data === 'max') {
+        // A double-click on the header bar may already have been handled by
+        // the window manager.
+        if (Date.now() - lastMaxToggle > 400) win.isMaximized() ? win.unmaximize() : win.maximize();
+      }
       else if (m.data === 'close') win.close();
       break;
   }
@@ -571,6 +629,16 @@ function setOption(key, value) {
     case 'notifyTg': cfg.notifyTg = !!value; break;
     case 'notifyMode': if (['toast', 'attention', 'both'].includes(value)) cfg.notifyMode = value; break;
     case 'autoUpdate': cfg.autoUpdate = !!value; if (cfg.autoUpdate) updater.check(false); break;
+    case 'blurMessages': case 'blurPreviews': case 'blurNames': case 'blurPhotos': case 'blurMedia':
+      cfg[key] = !!value;
+      pushPrivacy(svcs.wa);
+      pushPrivacy(svcs.tg);
+      break;
+    case 'lockAfter': {
+      const n = Number(value);
+      if ([0, 1, 5, 15].includes(n)) cfg.lockAfter = n;
+      break;
+    }
     case 'telegramVersion':
       if ((value === 'a' || value === 'k') && value !== cfg.telegramVersion) {
         cfg.telegramVersion = value;
@@ -597,6 +665,146 @@ function runAction(action) {
   }
 }
 
+// ---- app lock ---------------------------------------------------------------------------------
+// Same rules as applock.go (Windows): PBKDF2-HMAC-SHA256, 200,000 rounds, a
+// random 16-byte salt; after 5 wrong PINs each try waits 30 s, doubling up to
+// 5 minutes; "Forgot PIN?" signs out of both services and removes the PIN.
+
+const PIN_RE = /^[0-9]{4,8}$/;
+
+function hashPin(pin, saltHex) {
+  try { return crypto.pbkdf2Sync(String(pin), Buffer.from(saltHex, 'hex'), 200000, 32, 'sha256').toString('hex'); } catch (_) { return ''; }
+}
+
+function lockNow() {
+  if (!cfg.lockEnabled || appLocked) return;
+  log('lock: locked');
+  appLocked = true;
+  layout();
+  pushState();
+  applyStrip();
+  focusActive();
+}
+
+function unlockApp() {
+  appLocked = false;
+  awaySince = 0;
+  log('lock: unlocked');
+  layout();
+  pushState();
+  applyStrip();
+  focusActive();
+}
+
+function checkAway() {
+  if (!cfg.lockEnabled || appLocked || cfg.lockAfter <= 0 || !awaySince) return;
+  if (Date.now() - awaySince >= cfg.lockAfter * 60000) lockNow();
+}
+
+setInterval(() => {
+  if (!win) return;
+  if (!(win.isVisible() && win.isFocused() && !win.isMinimized())) {
+    if (!awaySince) awaySince = Date.now();
+    checkAway();
+  }
+}, 15000);
+
+function waitText(ms) {
+  let sec = Math.max(1, Math.round(ms / 1000));
+  if (sec >= 60 && sec % 60 === 0) { const m = sec / 60; return `${m} ${m === 1 ? 'minute' : 'minutes'}`; }
+  return `${sec} ${sec === 1 ? 'second' : 'seconds'}`;
+}
+
+// Returns '' when the PIN is right, otherwise the message to show.
+function checkPin(pin) {
+  const now = Date.now();
+  if (cfg.lockUntil * 1000 > now) return `Too many tries. Try again in ${waitText(cfg.lockUntil * 1000 - now)}.`;
+  const got = hashPin(pin, cfg.lockSalt);
+  if (cfg.lockHash && got && got.length === cfg.lockHash.length &&
+      crypto.timingSafeEqual(Buffer.from(got), Buffer.from(cfg.lockHash))) {
+    cfg.lockFails = 0;
+    cfg.lockUntil = 0;
+    saveConfig();
+    return '';
+  }
+  cfg.lockFails += 1;
+  let msg = 'Wrong PIN.';
+  if (cfg.lockFails >= 5) {
+    const wait = Math.min(30000 * 2 ** (cfg.lockFails - 5), 300000);
+    cfg.lockUntil = Math.floor((now + wait) / 1000);
+    msg = `Wrong PIN. Try again in ${waitText(wait)}.`;
+  } else if (5 - cfg.lockFails <= 2) {
+    const left = 5 - cfg.lockFails;
+    msg = `Wrong PIN. ${left} ${left === 1 ? 'try' : 'tries'} left before a pause.`;
+  }
+  saveConfig();
+  return msg;
+}
+
+function setPin(pin) {
+  cfg.lockSalt = crypto.randomBytes(16).toString('hex');
+  cfg.lockHash = hashPin(pin, cfg.lockSalt);
+  cfg.lockFails = 0;
+  cfg.lockUntil = 0;
+}
+
+function clearLock() {
+  Object.assign(cfg, { lockEnabled: false, lockHash: '', lockSalt: '', lockFails: 0, lockUntil: 0 });
+  saveConfig();
+}
+
+function onLockMessage(m) {
+  const reply = (ok, error) => shellEval('twincxt.lockResult(' + JSON.stringify({ op: m.op, ok, error: error || '' }) + ')');
+  switch (m.op) {
+    case 'set':
+      if (cfg.lockEnabled) return reply(false, 'App lock is already on.');
+      if (!PIN_RE.test(m.pin || '')) return reply(false, 'Use 4 to 8 digits.');
+      setPin(m.pin);
+      cfg.lockEnabled = true;
+      saveConfig();
+      log('lock: turned on');
+      reply(true);
+      pushState();
+      break;
+    case 'change': {
+      const err = checkPin(m.old || '');
+      if (err) return reply(false, err);
+      if (!PIN_RE.test(m.pin || '')) return reply(false, 'Use 4 to 8 digits.');
+      setPin(m.pin);
+      saveConfig();
+      reply(true);
+      break;
+    }
+    case 'disable': {
+      const err = checkPin(m.old || '');
+      if (err) return reply(false, err);
+      clearLock();
+      log('lock: turned off');
+      reply(true);
+      pushState();
+      break;
+    }
+    case 'unlock': {
+      if (!appLocked) return;
+      const err = checkPin(m.pin || '');
+      if (err) return reply(false, err);
+      reply(true);
+      unlockApp();
+      break;
+    }
+    case 'now': lockNow(); break;
+    case 'reset':
+      if (!appLocked) return;
+      log('lock: forgot PIN, signing out of both services');
+      runAction('reset:wa');
+      runAction('reset:tg');
+      clearLock();
+      reply(true);
+      unlockApp();
+      break;
+  }
+}
+
 // ---- notifications ----------------------------------------------------------------------------
 
 function iconFor(id) {
@@ -608,6 +816,7 @@ function notifyMessage(s, title, body) {
   if ((s.id === 'wa' && !cfg.notifyWa) || (s.id === 'tg' && !cfg.notifyTg)) return;
   const focused = win && win.isVisible() && win.isFocused() && !win.isMinimized();
   if (focused && s.id === cfg.active && !settingsOpen) return; // already looking at it
+  if (appLocked) { title = NAMES[s.id]; body = 'New message'; } // say that, not what
   if (cfg.notifyMode !== 'attention' && Notification.isSupported()) {
     const n = new Notification({ title: title || NAMES[s.id], body, icon: iconFor(s.id), silent: true });
     n.on('click', () => { selectService(s.id, 'notification'); showWindow(); });
@@ -747,6 +956,7 @@ function buildTray() {
     { label: label('WhatsApp', svcs.wa.unread), click: () => { selectService('wa', 'tray'); showWindow(); } },
     { label: label('Telegram', svcs.tg.unread), click: () => { selectService('tg', 'tray'); showWindow(); } },
     { type: 'separator' },
+    ...(cfg.lockEnabled && !appLocked ? [{ label: 'Lock', click: lockNow }] : []),
     { label: 'Settings', click: () => { toggleSettings(true); showWindow(); } },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));
@@ -840,6 +1050,12 @@ app.whenReady().then(() => {
         setTimeout(() => log('test: popups after close = ' + popups.size), 1500);
       }, 3000);
     }, 3000));
+  }
+
+  // Test hook for CI: TWINCXT_SELFTEST=1 checks the PIN hash against a known value.
+  if (process.env.TWINCXT_SELFTEST) {
+    const h = hashPin('1234', '00112233445566778899aabbccddeeff');
+    log('selftest: pbkdf2 ' + (h === '98cd56f19733a361768b76706415776c6f3e161aef907b7e88c5ea3fe5639ab7' ? 'ok' : 'FAILED ' + h));
   }
 
   // Test hook for CI: TWINCXT_SMOKE=<seconds> quits after that long.
