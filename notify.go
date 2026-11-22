@@ -108,9 +108,9 @@ func itoa(v int64) string {
 	return string(b[i:])
 }
 
-// watchDownload waits for a download to finish, then shows a toast that opens
-// the containing folder.
-func watchDownload(path string) {
+// watchDownload waits for a download to finish, then shows a toast from the
+// service it came from (WhatsApp or Telegram) that opens the containing folder.
+func watchDownload(path, service, icon string) {
 	go func() {
 		deadline := time.Now().Add(2 * time.Hour)
 		var lastSize int64 = -1
@@ -122,10 +122,10 @@ func watchDownload(path string) {
 			}
 			if info.Size() == lastSize {
 				toast{
-					Title:  "Download complete",
-					Body:   filepath.Base(path),
+					Title:  service,
+					Body:   "Download complete: " + filepath.Base(path),
 					Launch: "file:///" + filepath.ToSlash(filepath.Dir(path)),
-					Icon:   appIconPath(),
+					Icon:   icon,
 				}.show()
 				return
 			}

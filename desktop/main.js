@@ -697,12 +697,20 @@ function unlockApp() {
 }
 
 function checkAway() {
-  if (!cfg.lockEnabled || appLocked || cfg.lockAfter <= 0 || !awaySince) return;
+  if (!cfg.lockEnabled || appLocked || cfg.lockAfter <= 0 || !awaySince || inCall()) return;
   if (Date.now() - awaySince >= cfg.lockAfter * 60000) lockNow();
+}
+
+// A call in progress (a call window open, or a page playing sound) or a call
+// window in front counts as using Twincxt: no automatic lock then.
+function inCall() {
+  return busy(svcs.wa) || busy(svcs.tg);
 }
 
 setInterval(() => {
   if (!win) return;
+  const popupFocused = [...popups.keys()].some((p) => !p.isDestroyed() && p.isFocused());
+  if (inCall() || popupFocused) { awaySince = 0; return; }
   if (!(win.isVisible() && win.isFocused() && !win.isMinimized())) {
     if (!awaySince) awaySince = Date.now();
     checkAway();
@@ -982,7 +990,9 @@ function setupSession() {
   });
   ses.setPermissionCheckHandler((_wc, permission, origin) => permission !== 'notifications' && trusted(origin || ''));
 
-  ses.on('will-download', (_e, item) => {
+  ses.on('will-download', (_e, item, wc) => {
+    const v = wc && views.get(wc.id);
+    const svcId = v ? v.svc : '';
     const dir = app.getPath('downloads');
     const ext = path.extname(item.getFilename());
     const base = path.basename(item.getFilename(), ext) || 'download';
@@ -991,7 +1001,12 @@ function setupSession() {
     item.setSavePath(target);
     item.once('done', (_ev, state) => {
       if (state !== 'completed' || !Notification.isSupported()) return;
-      const n = new Notification({ title: 'Download complete', body: path.basename(target), icon: path.join(UI, 'icons', 'app.png'), silent: true });
+      const n = new Notification({
+        title: NAMES[svcId] || 'Twincxt',
+        body: 'Download complete: ' + path.basename(target),
+        icon: svcId ? iconFor(svcId) : path.join(UI, 'icons', 'app.png'),
+        silent: true,
+      });
       n.on('click', () => shell.showItemInFolder(target));
       n.show();
     });

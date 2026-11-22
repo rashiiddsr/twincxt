@@ -1073,7 +1073,13 @@ func (a *app) configureWebView(wv *webView, svcID string) {
 		}
 		req.Handled()
 	})
-	wv.OnDownload(func(path string) { watchDownload(path) })
+	wv.OnDownload(func(path string) {
+		name := "Twincxt"
+		if s := a.svc(svcID); s != nil {
+			name = s.name
+		}
+		watchDownload(path, name, serviceIconPath(svcID))
+	})
 	wv.OnAcceleratorKey(a.handleShortcut)
 }
 

@@ -6,7 +6,9 @@ package main
 //     (200,000 rounds, random 16-byte salt) in config.json.
 //   - Twincxt locks when it starts, when you press the lock button / Ctrl+L /
 //     the tray's Lock, and after it has been in the background for LockAfter
-//     minutes (0 = only on start).
+//     minutes (0 = only on start). A call window counts as Twincxt, and no
+//     automatic lock happens during a call (a call window is open or a page
+//     is playing sound).
 //   - Wrong PINs: after 5 in a row, each further try waits 30 s, doubling up
 //     to 5 minutes. The count survives restarts.
 //   - Forgot the PIN: "Forgot PIN?" signs out of WhatsApp and Telegram (their
@@ -103,7 +105,7 @@ func (a *app) onActivate(active bool) {
 // runs on a timer too, so the window is already locked when it comes back
 // (and in the taskbar preview).
 func (a *app) checkAway() {
-	if !a.cfg.LockEnabled || a.appLocked || a.cfg.LockAfter <= 0 || a.awaySince.IsZero() {
+	if !a.cfg.LockEnabled || a.appLocked || a.cfg.LockAfter <= 0 || a.awaySince.IsZero() || a.inCall() {
 		return
 	}
 	if time.Since(a.awaySince) >= time.Duration(a.cfg.LockAfter)*time.Minute {
@@ -111,8 +113,30 @@ func (a *app) checkAway() {
 	}
 }
 
+// inCall reports a call in progress: a call window is open, or WhatsApp or
+// Telegram is playing sound (a call in the main window, a voice note).
+func (a *app) inCall() bool {
+	if len(a.popups) > 0 {
+		return true
+	}
+	for _, s := range a.svcs {
+		if s.wv != nil && s.wv.PlayingAudio() {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *app) onLockTimer() {
+	if a.inCall() {
+		a.awaySince = time.Time{}
+		return
+	}
 	fg, _, _ := pGetForegroundWindow.Call()
+	if _, ours := a.popups[fg]; ours {
+		a.awaySince = time.Time{}
+		return
+	}
 	if fg != a.hwnd || !isVisible(a.hwnd) || isIconic(a.hwnd) {
 		if a.awaySince.IsZero() {
 			a.awaySince = time.Now()

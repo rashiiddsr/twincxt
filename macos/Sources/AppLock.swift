@@ -15,6 +15,7 @@
 // data on disk.
 
 import AppKit
+import WebKit
 import CommonCrypto
 import Security
 
@@ -140,11 +141,21 @@ extension AppDelegate {
   // Locks when Twincxt has been in the background long enough. It runs on a
   // timer too, so the window is already locked when it comes back.
   func checkAway() {
-    guard cfg.lockEnabled, !appLocked, cfg.lockAfter > 0, let since = awaySince else { return }
+    guard cfg.lockEnabled, !appLocked, cfg.lockAfter > 0, !inCall, let since = awaySince else { return }
     if Date().timeIntervalSince(since) >= TimeInterval(cfg.lockAfter * 60) { lockNow() }
   }
 
+  // A call is going on: a call window is open, or a page uses the camera or
+  // the microphone. No automatic lock then.
+  var inCall: Bool {
+    if !popups.isEmpty { return true }
+    var views: [WKWebView] = services.values.compactMap { $0.view }
+    views += popups.map { $0.view }
+    return views.contains { $0.cameraCaptureState == .active || $0.microphoneCaptureState == .active }
+  }
+
   func onLockTimer() {
+    if inCall { awaySince = nil; return }
     if isAway {
       if awaySince == nil { awaySince = Date() }
       checkAway()

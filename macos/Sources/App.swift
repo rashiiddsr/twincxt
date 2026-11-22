@@ -961,7 +961,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   func downloadDidFinish(_ download: WKDownload) {
     guard let target = downloads.removeValue(forKey: ObjectIdentifier(download)) else { return }
-    post(title: "Download complete", body: target.lastPathComponent, info: ["reveal": target.path])
+    // Say which service the file came from, like its message notifications.
+    let svc = download.webView.flatMap { viewInfo[ObjectIdentifier($0)]?.svc } ?? ""
+    post(title: NAMES[svc] ?? "Twincxt", body: "Download complete: \(target.lastPathComponent)", info: ["reveal": target.path])
   }
 
   func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
