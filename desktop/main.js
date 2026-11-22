@@ -44,7 +44,7 @@ const DEFAULTS = {
   notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
   autoUpdate: true, skippedVersion: '',
   blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
-  lockEnabled: false, lockHash: '', lockSalt: '', lockAfter: 5, lockFails: 0, lockUntil: 0,
+  lockEnabled: false, lockType: 'pin', lockHash: '', lockSalt: '', lockAfter: 5, lockFails: 0, lockUntil: 0,
   window: { x: 0, y: 0, w: 1240, h: 800, maximized: false },
 };
 let cfg = loadConfig();
@@ -60,6 +60,7 @@ function loadConfig() {
   if (!['a', 'k'].includes(c.telegramVersion)) c.telegramVersion = 'a';
   for (const k of ['zoomWa', 'zoomTg']) if (!(c[k] >= 50 && c[k] <= 200)) c[k] = 100;
   if (![0, 1, 5, 15].includes(c.lockAfter)) c.lockAfter = 5;
+  if (c.lockType !== 'password') c.lockType = 'pin';
   if (c.lockEnabled && !c.lockHash) c.lockEnabled = false;
   return c;
 }
@@ -168,6 +169,7 @@ function pushState() {
     lockEnabled: cfg.lockEnabled,
     locked: appLocked,
     lockAfter: cfg.lockAfter,
+    lockType: cfg.lockType,
     decorationLayout: DECORATION_LAYOUT,
     maximized: !!win && win.isMaximized(),
     settingsOpen,
@@ -267,7 +269,12 @@ setInterval(() => {
 }, Math.min(60000, WARM_MS / 2));
 
 function focusActive() {
-  if (settingsOpen || appLocked) return shellView && shellView.webContents.focus();
+  if (settingsOpen || appLocked) {
+    if (!shellView) return;
+    shellView.webContents.focus();
+    if (appLocked) shellEval('twincxt.focusLock && twincxt.focusLock()'); // ready to type
+    return;
+  }
   const s = svcs[cfg.active];
   if (s.view) s.view.webContents.focus();
 }
@@ -563,6 +570,7 @@ ipcMain.on('shell-msg', (_e, raw) => {
       }
       applyStrip();
       if (updater) updater.onState(updater.state);
+      if (appLocked && win && win.isFocused()) focusActive();
       break;
     case 'select': selectService(m.data, 'sidebar'); break;
     case 'settings': toggleSettings(!!m.data); break;
@@ -671,6 +679,14 @@ function runAction(action) {
 // 5 minutes; "Forgot PIN?" signs out of both services and removes the PIN.
 
 const PIN_RE = /^[0-9]{4,8}$/;
+const lockKind = (k) => (k === 'password' ? 'password' : 'pin');
+const lockName = () => (cfg.lockType === 'password' ? 'password' : 'PIN');
+// Validates a new PIN or password; '' when it is fine.
+function checkSecret(kind, v) {
+  v = String(v || '');
+  if (kind === 'password') return [...v].length >= 6 && [...v].length <= 128 ? '' : 'Use at least 6 characters.';
+  return PIN_RE.test(v) ? '' : 'Use 4 to 8 digits.';
+}
 
 function hashPin(pin, saltHex) {
   try { return crypto.pbkdf2Sync(String(pin), Buffer.from(saltHex, 'hex'), 200000, 32, 'sha256').toString('hex'); } catch (_) { return ''; }
@@ -736,14 +752,14 @@ function checkPin(pin) {
     return '';
   }
   cfg.lockFails += 1;
-  let msg = 'Wrong PIN.';
+  let msg = `Wrong ${lockName()}.`;
   if (cfg.lockFails >= 5) {
     const wait = Math.min(30000 * 2 ** (cfg.lockFails - 5), 300000);
     cfg.lockUntil = Math.floor((now + wait) / 1000);
-    msg = `Wrong PIN. Try again in ${waitText(wait)}.`;
+    msg = `Wrong ${lockName()}. Try again in ${waitText(wait)}.`;
   } else if (5 - cfg.lockFails <= 2) {
     const left = 5 - cfg.lockFails;
-    msg = `Wrong PIN. ${left} ${left === 1 ? 'try' : 'tries'} left before a pause.`;
+    msg = `Wrong ${lockName()}. ${left} ${left === 1 ? 'try' : 'tries'} left before a pause.`;
   }
   saveConfig();
   return msg;
@@ -757,7 +773,7 @@ function setPin(pin) {
 }
 
 function clearLock() {
-  Object.assign(cfg, { lockEnabled: false, lockHash: '', lockSalt: '', lockFails: 0, lockUntil: 0 });
+  Object.assign(cfg, { lockEnabled: false, lockType: 'pin', lockHash: '', lockSalt: '', lockFails: 0, lockUntil: 0 });
   saveConfig();
 }
 
@@ -766,8 +782,9 @@ function onLockMessage(m) {
   switch (m.op) {
     case 'set':
       if (cfg.lockEnabled) return reply(false, 'App lock is already on.');
-      if (!PIN_RE.test(m.pin || '')) return reply(false, 'Use 4 to 8 digits.');
+      { const bad = checkSecret(lockKind(m.kind), m.pin); if (bad) return reply(false, bad); }
       setPin(m.pin);
+      cfg.lockType = lockKind(m.kind);
       cfg.lockEnabled = true;
       saveConfig();
       log('lock: turned on');
@@ -777,10 +794,12 @@ function onLockMessage(m) {
     case 'change': {
       const err = checkPin(m.old || '');
       if (err) return reply(false, err);
-      if (!PIN_RE.test(m.pin || '')) return reply(false, 'Use 4 to 8 digits.');
+      { const bad = checkSecret(lockKind(m.kind), m.pin); if (bad) return reply(false, bad); }
       setPin(m.pin);
+      cfg.lockType = lockKind(m.kind);
       saveConfig();
       reply(true);
+      pushState();
       break;
     }
     case 'disable': {

@@ -516,6 +516,10 @@ func (a *app) focusActive() {
 	if a.settings || a.appLocked {
 		if a.shell != nil {
 			a.shell.Focus()
+			if a.appLocked && a.shellOK {
+				// Caret in the PIN / password field, ready to type.
+				a.shell.Eval("twincxt.focusLock && twincxt.focusLock()")
+			}
 		}
 		return
 	}
@@ -659,6 +663,9 @@ func (a *app) onShellMessage(raw string) {
 	case "ready":
 		a.shellOK = true
 		a.pushState()
+		if fg, _, _ := pGetForegroundWindow.Call(); a.appLocked && fg == a.hwnd {
+			a.focusActive() // the lock screen takes the keyboard right away
+		}
 		for _, s := range a.svcs {
 			a.pushUnread(s)
 			a.shell.Eval(fmt.Sprintf("twincxt.loading(%q,%v)", s.id, !s.ready))
@@ -752,6 +759,7 @@ func (a *app) pushState() {
 		"lockEnabled":     a.cfg.LockEnabled,
 		"locked":          a.appLocked,
 		"lockAfter":       a.cfg.LockAfter,
+		"lockType":        a.cfg.LockType,
 		"platform":        "windows",
 		"version":         appVersion,
 		"maximized":       isZoomed(a.hwnd),

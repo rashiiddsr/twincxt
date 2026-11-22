@@ -461,7 +461,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 :root[data-platform="linux"] .sheet { border-radius: 14px; }
 .sheet h3 { margin: 0 0 4px; font: 600 18px/24px var(--font-display); }
 .sheet label { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
-.sheet label[hidden] { display: none; }
+.sheet label[hidden], .sheet .combo[hidden] { display: none; }
+.sheet .combo { justify-self: start; }
 .sheet .pin { text-align: left; }
 .sheet-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
 .sheet-note[hidden] { display: none; }
@@ -654,8 +655,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
           </div>
           <div class="card" data-lock-row hidden>
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-key"/></svg></span>
-            <div class="card-text"><div class="card-title">PIN</div></div>
-            <button class="btn" id="lockChange">Change PIN</button>
+            <div class="card-text"><div class="card-title" id="lockKindTitle">PIN</div></div>
+            <button class="btn" id="lockChange">Change</button>
           </div>
           <div class="card" data-lock-row hidden>
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-timer"/></svg></span>
@@ -746,15 +747,15 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
       </svg>
       <h2>Twincxt is locked</h2>
       <form id="unlockForm" autocomplete="off">
-        <input class="pin" id="unlockPin" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN" aria-label="PIN">
+        <input class="pin" id="unlockPin" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN" aria-label="PIN" autofocus>
         <button class="btn primary" id="unlockBtn">Unlock</button>
       </form>
       <p class="lock-msg" id="unlockMsg"></p>
-      <button class="link" id="forgotBtn">Forgot PIN?</button>
+      <button class="link" id="forgotBtn">Forgot your PIN?</button>
     </div>
     <div class="lock-box" id="resetBox" hidden>
       <h2>Reset app lock?</h2>
-      <p>This signs you out of WhatsApp and Telegram and removes the PIN. Scan the QR codes with your phone to sign back in.</p>
+      <p>This signs you out of WhatsApp and Telegram and turns off the app lock. Scan the QR codes with your phone to sign back in.</p>
       <div class="lock-actions">
         <button class="btn" id="resetCancel">Cancel</button>
         <button class="btn armed" id="resetGo">Sign out and reset</button>
@@ -764,10 +765,14 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 
   <div class="sheet-bg" id="pinSheet" hidden>
     <form class="sheet" id="pinForm" autocomplete="off">
-      <h3 id="pinTitle">Set a PIN</h3>
-      <label data-f="old">Current PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="old"></label>
-      <label data-f="new">New PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="pin"></label>
-      <label data-f="confirm">Confirm PIN<input class="pin" type="password" inputmode="numeric" maxlength="8" name="confirm"></label>
+      <h3 id="pinTitle">Turn on app lock</h3>
+      <label data-f="old"><span id="oldLabel">Current PIN</span><input class="pin" type="password" inputmode="numeric" maxlength="8" name="old"></label>
+      <div class="combo" data-f="kind" id="kindChoice">
+        <button type="button" data-kind="pin">PIN</button>
+        <button type="button" data-kind="password">Password</button>
+      </div>
+      <label data-f="new"><span id="newLabel">New PIN</span><input class="pin" type="password" inputmode="numeric" maxlength="8" name="pin"></label>
+      <label data-f="confirm"><span id="confirmLabel">Confirm PIN</span><input class="pin" type="password" inputmode="numeric" maxlength="8" name="confirm"></label>
       <p class="sheet-note" data-f="note">If you forget it, you can reset it by signing out of WhatsApp and Telegram.</p>
       <p class="sheet-msg" id="pinMsg"></p>
       <div class="sheet-actions">
@@ -793,7 +798,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
     autoUpdate: true,
     // App lock: the host keeps the PIN (hashed) and decides when to lock.
-    lockEnabled: false, locked: false, lockAfter: 5,
+    lockEnabled: false, locked: false, lockAfter: 5, lockType: 'pin',
     blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
     // Linux: GNOME's button layout (org.gnome.desktop.wm.preferences button-layout).
     decorationLayout: 'appmenu:close',
@@ -953,33 +958,62 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
 
   // ---- app lock ---------------------------------------------------------------
   var lockWasShown = false;
+  // The lock is a PIN (4 to 8 digits) or a password (6 to 128 characters).
+  var KIND = {
+    pin: { name: 'PIN', mode: 'numeric', max: 8, check: function (v) { return /^[0-9]{4,8}$/.test(v); }, rule: 'Use 4 to 8 digits.' },
+    password: { name: 'password', mode: 'text', max: 128, check: function (v) { return v.length >= 6 && v.length <= 128; }, rule: 'Use at least 6 characters.' }
+  };
+  function kindOf(k) { return KIND[k] || KIND.pin; }
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function setInput(input, k) {
+    input.inputMode = k.mode;
+    input.maxLength = k.max;
+  }
+  // Puts the caret in the lock screen's field, so you can type at once.
+  function focusUnlock() {
+    if (!(s.lockEnabled && s.locked)) return;
+    if (document.getElementById('unlockBox').hidden) return;
+    var pin = document.getElementById('unlockPin');
+    if (document.activeElement !== pin) pin.focus();
+  }
+  window.addEventListener('focus', function () { setTimeout(focusUnlock, 0); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(focusUnlock, 0); });
+  document.addEventListener('mousedown', function (e) {
+    // A click anywhere on the lock screen except its buttons returns to the field.
+    if (s.locked && e.target.closest('#lockscreen') && !e.target.closest('button,input')) setTimeout(focusUnlock, 0);
+  });
+
   function renderLock() {
-    var on = !!s.lockEnabled, shown = on && !!s.locked;
+    var on = !!s.lockEnabled, shown = on && !!s.locked, k = kindOf(s.lockType);
     app.classList.toggle('lock-on', on);
     app.classList.toggle('app-locked', shown);
     var tg = document.getElementById('lockToggle');
     tg.setAttribute('aria-checked', String(on));
     tg.querySelector('.state').textContent = on ? 'On' : 'Off';
     document.querySelectorAll('[data-lock-row]').forEach(function (r) { r.hidden = !on; });
+    document.getElementById('lockKindTitle').textContent = cap(k.name);
     var lb = document.getElementById('lockBtn');
     lb.hidden = !on;
     lb.title = 'Lock (' + (s.platform === 'mac' ? '\u2318L' : 'Ctrl+L') + ')';
+    var pin = document.getElementById('unlockPin');
+    setInput(pin, k);
+    pin.placeholder = 'Enter ' + k.name;
+    pin.setAttribute('aria-label', cap(k.name));
+    document.getElementById('forgotBtn').textContent = 'Forgot your ' + k.name + '?';
     document.getElementById('lockscreen').hidden = !shown;
     if (shown) {
       if (!lockWasShown) {
         document.getElementById('unlockBox').hidden = false;
         document.getElementById('resetBox').hidden = true;
         document.getElementById('unlockMsg').textContent = '';
-        var pin = document.getElementById('unlockPin');
         pin.value = '';
-        setTimeout(function () { pin.focus(); }, 0);
       }
+      setTimeout(focusUnlock, 0);
       document.getElementById('stripCtx').textContent = 'Locked';
       document.title = 'Twincxt';
     }
     lockWasShown = shown;
   }
-  function onlyDigits(v) { return /^[0-9]{4,8}$/.test(v); }
 
   document.getElementById('unlockForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -995,40 +1029,66 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   document.getElementById('resetCancel').addEventListener('click', function () {
     document.getElementById('resetBox').hidden = true;
     document.getElementById('unlockBox').hidden = false;
-    document.getElementById('unlockPin').focus();
+    focusUnlock();
   });
   document.getElementById('resetGo').addEventListener('click', function () { send('lock', { op: 'reset' }); });
   document.getElementById('lockBtn').addEventListener('click', function () { send('lock', { op: 'now' }); });
 
-  // PIN dialog: mode "set" (turn on), "change", "disable" (turn off).
-  var sheetMode = '';
+  // Lock dialog: mode "set" (turn on), "change", "disable" (turn off).
+  var sheetMode = '', sheetKind = 'pin';
+  function renderSheetKind() {
+    var f = document.getElementById('pinForm'), k = kindOf(sheetKind);
+    document.querySelectorAll('#kindChoice button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.kind === sheetKind));
+    });
+    document.getElementById('newLabel').textContent = 'New ' + k.name;
+    document.getElementById('confirmLabel').textContent = 'Confirm ' + k.name;
+    setInput(f.pin, k);
+    setInput(f.confirm, k);
+  }
   function openSheet(mode) {
     sheetMode = mode;
-    var f = document.getElementById('pinForm');
+    sheetKind = mode === 'set' ? 'pin' : (s.lockType === 'password' ? 'password' : 'pin');
+    var f = document.getElementById('pinForm'), cur = kindOf(s.lockType);
     f.reset();
-    document.getElementById('pinTitle').textContent = mode === 'set' ? 'Set a PIN' : mode === 'change' ? 'Change PIN' : 'Turn off app lock';
+    document.getElementById('pinTitle').textContent = mode === 'set' ? 'Turn on app lock' : mode === 'change' ? 'Change ' + cur.name : 'Turn off app lock';
     document.getElementById('pinOk').textContent = mode === 'disable' ? 'Turn off' : 'Save';
+    document.getElementById('oldLabel').textContent = 'Current ' + cur.name;
+    setInput(f.old, cur);
     f.querySelector('[data-f="old"]').hidden = mode === 'set';
+    f.querySelector('[data-f="kind"]').hidden = mode === 'disable';
     f.querySelector('[data-f="new"]').hidden = mode === 'disable';
     f.querySelector('[data-f="confirm"]').hidden = mode === 'disable';
     f.querySelector('[data-f="note"]').hidden = mode !== 'set';
+    renderSheetKind();
     document.getElementById('pinMsg').textContent = '';
     document.getElementById('pinSheet').hidden = false;
     var first = f.querySelector('label:not([hidden]) input');
     setTimeout(function () { first.focus(); }, 0);
   }
+  document.getElementById('kindChoice').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b || b.dataset.kind === sheetKind) return;
+    sheetKind = b.dataset.kind;
+    var f = document.getElementById('pinForm');
+    f.pin.value = '';
+    f.confirm.value = '';
+    document.getElementById('pinMsg').textContent = '';
+    renderSheetKind();
+    f.pin.focus();
+  });
   function closeSheet() { document.getElementById('pinSheet').hidden = true; sheetMode = ''; }
   document.getElementById('pinCancel').addEventListener('click', closeSheet);
   document.getElementById('pinForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var f = e.target, msg = document.getElementById('pinMsg');
+    var f = e.target, msg = document.getElementById('pinMsg'), k = kindOf(sheetKind);
     var old = f.old.value, pin = f.pin.value, confirm = f.confirm.value;
+    if (sheetMode !== 'set' && !old) { msg.textContent = 'Enter your current ' + kindOf(s.lockType).name + '.'; return; }
     if (sheetMode !== 'disable') {
-      if (!onlyDigits(pin)) { msg.textContent = 'Use 4 to 8 digits.'; return; }
-      if (pin !== confirm) { msg.textContent = "PINs don't match."; return; }
+      if (!k.check(pin)) { msg.textContent = k.rule; return; }
+      if (pin !== confirm) { msg.textContent = cap(k.name) + "s don't match."; return; }
     }
-    if (sheetMode !== 'set' && !old) { msg.textContent = 'Enter your current PIN.'; return; }
-    send('lock', { op: sheetMode, pin: pin, old: old });
+    send('lock', { op: sheetMode, pin: pin, old: old, kind: sheetKind });
   });
   document.getElementById('lockToggle').addEventListener('click', function () { openSheet(s.lockEnabled ? 'disable' : 'set'); });
   document.getElementById('lockChange').addEventListener('click', function () { openSheet('change'); });
@@ -1037,11 +1097,12 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   function lockResult(r) {
     r = r || {};
     if (r.op === 'unlock' || r.op === 'reset') {
-      document.getElementById('unlockMsg').textContent = r.ok ? '' : (r.error || 'Wrong PIN');
+      document.getElementById('unlockMsg').textContent = r.ok ? '' : (r.error || 'Wrong ' + kindOf(s.lockType).name + '.');
+      if (!r.ok) focusUnlock();
       return;
     }
     if (r.ok) closeSheet();
-    else document.getElementById('pinMsg').textContent = r.error || 'Wrong PIN';
+    else document.getElementById('pinMsg').textContent = r.error || 'Wrong ' + kindOf(s.lockType).name + '.';
   }
 
   function locked() { return !!(s.update && s.update.required); }
@@ -1144,6 +1205,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     unread: function (svc, n) { s.unread[svc] = n; render(); },
     update: function (u) { s.update = u; renderUpdate(); },
     lockResult: lockResult,
+    focusLock: function () { setTimeout(focusUnlock, 0); },
     loading: function (svc, on) { document.querySelector('.half[data-svc="' + svc + '"]').classList.toggle('loading', on); },
     strip: function (bg, fg) {
       var st = document.getElementById('strip');

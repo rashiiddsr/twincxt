@@ -78,6 +78,14 @@ private func validPin(_ p: String) -> Bool {
   (4...8).contains(p.count) && p.allSatisfy { ("0"..."9").contains($0) }
 }
 
+private func lockKind(_ k: String) -> String { k == "password" ? "password" : "pin" }
+
+// Validates a new PIN (4 to 8 digits) or password (6 to 128 characters); "" when fine.
+private func checkSecret(_ kind: String, _ v: String) -> String {
+  if kind == "password" { return (6...128).contains(v.count) ? "" : "Use at least 6 characters." }
+  return validPin(v) ? "" : "Use 4 to 8 digits."
+}
+
 // CI check against a known PBKDF2 result.
 func lockSelfTest() -> Bool {
   let got = hashPin("1234", "00112233445566778899aabbccddeeff")
@@ -178,16 +186,17 @@ extension AppDelegate {
       return ""
     }
     cfg.lockFails += 1
-    var msg = "Wrong PIN."
+    let name = cfg.lockType == "password" ? "password" : "PIN"
+    var msg = "Wrong \(name)."
     if cfg.lockFails >= FREE_TRIES {
       let shift = cfg.lockFails - FREE_TRIES
       var wait = shift < 20 ? FIRST_WAIT << Int64(shift) : MAX_WAIT
       if wait > MAX_WAIT || wait <= 0 { wait = MAX_WAIT }
       cfg.lockUntil = now + wait
-      msg = "Wrong PIN. Try again in \(waitText(wait))."
+      msg = "Wrong \(name). Try again in \(waitText(wait))."
     } else {
       let left = Int64(FREE_TRIES - cfg.lockFails)
-      if left <= 2 { msg = "Wrong PIN. \(left) \(plural(left, "try", "tries")) left before a pause." }
+      if left <= 2 { msg = "Wrong \(name). \(left) \(plural(left, "try", "tries")) left before a pause." }
     }
     cfg.save()
     return msg
@@ -199,14 +208,17 @@ extension AppDelegate {
     let op = m["op"] as? String ?? ""
     let pin = m["pin"] as? String ?? ""
     let old = m["old"] as? String ?? ""
+    let kind = lockKind(m["kind"] as? String ?? "")
     func reply(_ ok: Bool, _ msg: String) {
       shellEval("twincxt.lockResult(" + json(["op": op, "ok": ok, "error": msg] as [String: Any]) + ")")
     }
     switch op {
     case "set":
       if cfg.lockEnabled { reply(false, "App lock is already on."); return }
-      if !validPin(pin) { reply(false, "Use 4 to 8 digits."); return }
+      let bad = checkSecret(kind, pin)
+      if !bad.isEmpty { reply(false, bad); return }
       setPin(pin)
+      cfg.lockType = kind
       cfg.lockEnabled = true
       cfg.save()
       dlog("lock: turned on")
@@ -215,10 +227,13 @@ extension AppDelegate {
     case "change":
       let msg = checkPin(old)
       if !msg.isEmpty { reply(false, msg); return }
-      if !validPin(pin) { reply(false, "Use 4 to 8 digits."); return }
+      let bad = checkSecret(kind, pin)
+      if !bad.isEmpty { reply(false, bad); return }
       setPin(pin)
+      cfg.lockType = kind
       cfg.save()
       reply(true, "")
+      pushState()
     case "disable":
       let msg = checkPin(old)
       if !msg.isEmpty { reply(false, msg); return }
@@ -256,6 +271,7 @@ extension AppDelegate {
 
   func clearLock() {
     cfg.lockEnabled = false
+    cfg.lockType = "pin"
     cfg.lockHash = ""
     cfg.lockSalt = ""
     cfg.lockFails = 0

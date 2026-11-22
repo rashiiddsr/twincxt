@@ -1,8 +1,10 @@
 package main
 
-// App lock: a PIN that hides WhatsApp and Telegram behind a lock screen.
+// App lock: a PIN or a password that hides WhatsApp and Telegram behind a
+// lock screen.
 //
-//   - The PIN (4 to 8 digits) is never stored: only a PBKDF2-HMAC-SHA256 hash
+//   - A PIN is 4 to 8 digits, a password 6 to 128 characters. Neither is
+//     stored: only a PBKDF2-HMAC-SHA256 hash
 //     (200,000 rounds, random 16-byte salt) in config.json.
 //   - Twincxt locks when it starts, when you press the lock button / Ctrl+L /
 //     the tray's Lock, and after it has been in the background for LockAfter
@@ -40,6 +42,35 @@ const (
 )
 
 var pinRe = regexp.MustCompile(`^[0-9]{4,8}$`)
+
+// checkSecret validates a new PIN or password; "" when it is fine.
+func checkSecret(kind, v string) string {
+	if kind == "password" {
+		if n := len([]rune(v)); n < 6 || n > 128 {
+			return "Use at least 6 characters."
+		}
+		return ""
+	}
+	if !pinRe.MatchString(v) {
+		return "Use 4 to 8 digits."
+	}
+	return ""
+}
+
+func lockKind(k string) string {
+	if k == "password" {
+		return "password"
+	}
+	return "pin"
+}
+
+// lockName is how the current secret is called in messages.
+func (a *app) lockName() string {
+	if a.cfg.LockType == "password" {
+		return "password"
+	}
+	return "PIN"
+}
 
 func hashPin(pin, saltHex string) string {
 	salt, _ := hex.DecodeString(saltHex)
@@ -161,16 +192,16 @@ func (a *app) checkPin(pin string) string {
 		return ""
 	}
 	a.cfg.LockFails++
-	msg := "Wrong PIN."
+	msg := "Wrong " + a.lockName() + "."
 	if a.cfg.LockFails >= freeTries {
 		wait := firstWait << uint(a.cfg.LockFails-freeTries)
 		if wait > maxWait || wait <= 0 {
 			wait = maxWait
 		}
 		a.cfg.LockUntil = now.Add(wait).Unix()
-		msg = fmt.Sprintf("Wrong PIN. Try again in %s.", waitText(wait))
+		msg = fmt.Sprintf("Wrong %s. Try again in %s.", a.lockName(), waitText(wait))
 	} else if left := freeTries - a.cfg.LockFails; left <= 2 {
-		msg = fmt.Sprintf("Wrong PIN. %d %s left before a pause.", left, plural(left, "try", "tries"))
+		msg = fmt.Sprintf("Wrong %s. %d %s left before a pause.", a.lockName(), left, plural(left, "try", "tries"))
 	}
 	a.cfg.save()
 	return msg
@@ -198,9 +229,10 @@ func plural(n int, one, many string) string {
 // {op:"set"|"change"|"disable"|"unlock"|"now"|"reset", pin, old}.
 func (a *app) onLockMessage(data json.RawMessage) {
 	var m struct {
-		Op  string `json:"op"`
-		Pin string `json:"pin"`
-		Old string `json:"old"`
+		Op   string `json:"op"`
+		Pin  string `json:"pin"`
+		Old  string `json:"old"`
+		Kind string `json:"kind"`
 	}
 	_ = json.Unmarshal(data, &m)
 	reply := func(ok bool, msg string) {
@@ -213,11 +245,12 @@ func (a *app) onLockMessage(data json.RawMessage) {
 			reply(false, "App lock is already on.")
 			return
 		}
-		if !pinRe.MatchString(m.Pin) {
-			reply(false, "Use 4 to 8 digits.")
+		if msg := checkSecret(lockKind(m.Kind), m.Pin); msg != "" {
+			reply(false, msg)
 			return
 		}
 		a.setPin(m.Pin)
+		a.cfg.LockType = lockKind(m.Kind)
 		a.cfg.LockEnabled = true
 		a.cfg.save()
 		debugLog("lock: turned on")
@@ -229,13 +262,15 @@ func (a *app) onLockMessage(data json.RawMessage) {
 			reply(false, msg)
 			return
 		}
-		if !pinRe.MatchString(m.Pin) {
-			reply(false, "Use 4 to 8 digits.")
+		if msg := checkSecret(lockKind(m.Kind), m.Pin); msg != "" {
+			reply(false, msg)
 			return
 		}
 		a.setPin(m.Pin)
+		a.cfg.LockType = lockKind(m.Kind)
 		a.cfg.save()
 		reply(true, "")
+		a.pushState()
 	case "disable":
 		if msg := a.checkPin(m.Old); msg != "" {
 			reply(false, msg)
@@ -280,6 +315,7 @@ func (a *app) setPin(pin string) {
 
 func (a *app) clearLock() {
 	a.cfg.LockEnabled = false
+	a.cfg.LockType = "pin"
 	a.cfg.LockHash = ""
 	a.cfg.LockSalt = ""
 	a.cfg.LockFails = 0

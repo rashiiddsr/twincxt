@@ -35,6 +35,7 @@ type config struct {
 	BlurPhotos      bool        `json:"blurPhotos"`
 	BlurMedia       bool        `json:"blurMedia"`
 	LockEnabled     bool        `json:"lockEnabled"`
+	LockType        string      `json:"lockType"`  // pin | password
 	LockHash        string      `json:"lockHash"`  // PBKDF2-HMAC-SHA256 of the PIN, hex
 	LockSalt        string      `json:"lockSalt"`  // hex
 	LockAfter       int         `json:"lockAfter"` // minutes in the background; 0 = only on start
@@ -88,6 +89,9 @@ func loadConfig() config {
 	}
 	if c.LockAfter != 0 && c.LockAfter != 1 && c.LockAfter != 5 && c.LockAfter != 15 {
 		c.LockAfter = 5
+	}
+	if c.LockType != "password" {
+		c.LockType = "pin"
 	}
 	if c.LockEnabled && c.LockHash == "" {
 		c.LockEnabled = false

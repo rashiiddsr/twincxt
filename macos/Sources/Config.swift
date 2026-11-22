@@ -50,6 +50,7 @@ final class Config {
   var blur: [String: Bool] = [:]
   // App lock (AppLock.swift).
   var lockEnabled = false
+  var lockType = "pin" // pin | password
   var lockHash = "" // PBKDF2-HMAC-SHA256 of the PIN, hex
   var lockSalt = "" // hex
   var lockAfter = 5 // minutes in the background; 0 = only on start
@@ -103,6 +104,7 @@ final class Config {
     skippedVersion = d["skippedVersion"] as? String ?? ""
     for k in BLUR_KEYS { blur[k] = bool(k, false) }
     lockEnabled = bool("lockEnabled", false)
+    lockType = (d["lockType"] as? String) == "password" ? "password" : "pin"
     lockHash = d["lockHash"] as? String ?? ""
     lockSalt = d["lockSalt"] as? String ?? ""
     lockAfter = (d["lockAfter"] as? NSNumber)?.intValue ?? 5
@@ -137,6 +139,7 @@ final class Config {
     d["skippedVersion"] = skippedVersion
     for k in BLUR_KEYS { d[k] = blur[k] ?? false }
     d["lockEnabled"] = lockEnabled
+    d["lockType"] = lockType
     d["lockHash"] = lockHash
     d["lockSalt"] = lockSalt
     d["lockAfter"] = lockAfter

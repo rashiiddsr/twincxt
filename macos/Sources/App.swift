@@ -285,7 +285,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   func focusActive() {
     guard let w = window else { return }
-    if settingsOpen || appLocked { w.makeFirstResponder(shell) } else if let v = services[cfg.active]?.view { w.makeFirstResponder(v) }
+    if settingsOpen || appLocked {
+      w.makeFirstResponder(shell)
+      if appLocked { shellEval("twincxt.focusLock && twincxt.focusLock()") } // ready to type
+    } else if let v = services[cfg.active]?.view { w.makeFirstResponder(v) }
   }
 
   func showWindow() {
@@ -427,6 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       "lockEnabled": cfg.lockEnabled,
       "locked": appLocked,
       "lockAfter": cfg.lockAfter,
+      "lockType": cfg.lockType,
     ]
     for k in BLUR_KEYS { st[k] = cfg.blur[k] ?? false }
     shellEval("twincxt.state(" + json(st) + ")")
@@ -496,6 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       }
       applyStrip()
       if let u = updater { shellEval("twincxt.update(" + json(u.state) + ")") }
+      if appLocked && window?.isKeyWindow == true { focusActive() }
     case "select":
       if let id = data as? String { selectService(id, "sidebar") }
     case "settings":
