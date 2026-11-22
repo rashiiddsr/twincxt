@@ -51,6 +51,7 @@ final class Config {
   // App lock (AppLock.swift).
   var lockEnabled = false
   var lockType = "pin" // pin | password
+  var lockBiometric = false // also unlock with Touch ID
   var lockHash = "" // PBKDF2-HMAC-SHA256 of the PIN, hex
   var lockSalt = "" // hex
   var lockAfter = 5 // minutes in the background; 0 = only on start
@@ -105,6 +106,7 @@ final class Config {
     for k in BLUR_KEYS { blur[k] = bool(k, false) }
     lockEnabled = bool("lockEnabled", false)
     lockType = (d["lockType"] as? String) == "password" ? "password" : "pin"
+    lockBiometric = bool("lockBiometric", false)
     lockHash = d["lockHash"] as? String ?? ""
     lockSalt = d["lockSalt"] as? String ?? ""
     lockAfter = (d["lockAfter"] as? NSNumber)?.intValue ?? 5
@@ -140,6 +142,7 @@ final class Config {
     for k in BLUR_KEYS { d[k] = blur[k] ?? false }
     d["lockEnabled"] = lockEnabled
     d["lockType"] = lockType
+    d["lockBiometric"] = lockBiometric
     d["lockHash"] = lockHash
     d["lockSalt"] = lockSalt
     d["lockAfter"] = lockAfter

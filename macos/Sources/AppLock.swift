@@ -15,6 +15,7 @@
 // data on disk.
 
 import AppKit
+import LocalAuthentication
 import WebKit
 import CommonCrypto
 import Security
@@ -101,6 +102,8 @@ extension AppDelegate {
   // Runs once at startup, before the window is shown.
   func startLock() {
     if cfg.lockEnabled && !cfg.lockHash.isEmpty { appLocked = true }
+    bioTried = false
+    checkBio()
     let nc = NotificationCenter.default
     nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.onActivate(false) }
     nc.addObserver(forName: NSApplication.didHideNotification, object: nil, queue: .main) { [weak self] _ in self?.onActivate(false) }
@@ -121,6 +124,7 @@ extension AppDelegate {
     if !cfg.lockEnabled || appLocked { return }
     dlog("lock: locked")
     appLocked = true
+    bioTried = false
     layout()
     pushState()
     applyStrip()
@@ -144,6 +148,56 @@ extension AppDelegate {
     }
     checkAway()
     awaySince = nil
+    autoBio()
+  }
+
+  // ---- Touch ID: an extra way to unlock; the PIN or password stays the fallback.
+
+  func checkBio() {
+    let ctx = LAContext()
+    var err: NSError?
+    bioAvailable = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
+    bioName = ctx.biometryType == .faceID ? "Face ID" : "Touch ID"
+    dlog("bio: available=\(bioAvailable)")
+  }
+
+  func startBio() {
+    if !appLocked || !cfg.lockBiometric || !bioAvailable || bioBusy { return }
+    bioBusy = true
+    let ctx = LAContext()
+    ctx.localizedFallbackTitle = "" // no "Enter Password": the Twincxt PIN/password is right there
+    ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "unlock Twincxt") { ok, err in
+      let code = (err as NSError?)?.code ?? 0
+      DispatchQueue.main.async { (NSApp.delegate as? AppDelegate)?.bioDone(ok, code) }
+    }
+  }
+
+  func bioDone(_ ok: Bool, _ code: Int) {
+    bioBusy = false
+    dlog("bio: ok=\(ok) code=\(code)")
+    if ok {
+      if appLocked {
+        cfg.lockFails = 0
+        cfg.lockUntil = 0
+        cfg.save()
+        unlockApp()
+      }
+      return
+    }
+    let canceled = [LAError.userCancel.rawValue, LAError.appCancel.rawValue, LAError.systemCancel.rawValue, LAError.userFallback.rawValue].contains(code)
+    if !canceled {
+      let name = cfg.lockType == "password" ? "password" : "PIN"
+      shellEval("twincxt.lockResult(" + json(["op": "unlock", "ok": false, "error": "\(bioName) isn't available right now. Use your \(name)."] as [String: Any]) + ")")
+    }
+    focusActive()
+  }
+
+  // Offers Touch ID by itself once per lock, when the locked window is in front.
+  func autoBio() {
+    if bioTried || !appLocked || !cfg.lockBiometric || !bioAvailable || !shellReady { return }
+    if !NSApp.isActive || window?.isKeyWindow != true { return }
+    bioTried = true
+    startBio()
   }
 
   // Locks when Twincxt has been in the background long enough. It runs on a
@@ -249,6 +303,8 @@ extension AppDelegate {
       unlockApp()
     case "now":
       lockNow()
+    case "bio":
+      startBio()
     case "reset":
       if !appLocked { return }
       dlog("lock: forgot PIN, signing out of both services")
@@ -272,6 +328,7 @@ extension AppDelegate {
   func clearLock() {
     cfg.lockEnabled = false
     cfg.lockType = "pin"
+    cfg.lockBiometric = false
     cfg.lockHash = ""
     cfg.lockSalt = ""
     cfg.lockFails = 0

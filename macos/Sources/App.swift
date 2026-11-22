@@ -88,6 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   var settingsOpen = false
   var updateLocked = false // a required update must be installed first
   var appLocked = false // the app lock screen is showing (AppLock.swift)
+  var bioAvailable = false // Touch ID can be used
+  var bioName = "Touch ID"
+  var bioBusy = false
+  var bioTried = false // Touch ID was offered for this lock already
   var awaySince: Date?
   var lockTimer: Timer?
   var hideAfterFullScreen = false
@@ -431,6 +435,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       "locked": appLocked,
       "lockAfter": cfg.lockAfter,
       "lockType": cfg.lockType,
+      "lockBiometric": cfg.lockBiometric,
+      "biometric": ["available": bioAvailable, "name": bioName] as [String: Any],
     ]
     for k in BLUR_KEYS { st[k] = cfg.blur[k] ?? false }
     shellEval("twincxt.state(" + json(st) + ")")
@@ -500,7 +506,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       }
       applyStrip()
       if let u = updater { shellEval("twincxt.update(" + json(u.state) + ")") }
-      if appLocked && window?.isKeyWindow == true { focusActive() }
+      if appLocked && window?.isKeyWindow == true { focusActive(); autoBio() }
     case "select":
       if let id = data as? String { selectService(id, "sidebar") }
     case "settings":
@@ -562,6 +568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     case "autostart":
       setAutostart(b)
     case "startHidden": cfg.startHidden = b
+    case "lockBiometric": cfg.lockBiometric = b
     case "lockAfter":
       let n = Int(s) ?? (value as? NSNumber)?.intValue ?? -1
       if [0, 1, 5, 15].contains(n) { cfg.lockAfter = n }

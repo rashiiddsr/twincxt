@@ -35,7 +35,8 @@ type config struct {
 	BlurPhotos      bool        `json:"blurPhotos"`
 	BlurMedia       bool        `json:"blurMedia"`
 	LockEnabled     bool        `json:"lockEnabled"`
-	LockType        string      `json:"lockType"`  // pin | password
+	LockType        string      `json:"lockType"` // pin | password
+	LockBiometric   bool        `json:"lockBiometric"`
 	LockHash        string      `json:"lockHash"`  // PBKDF2-HMAC-SHA256 of the PIN, hex
 	LockSalt        string      `json:"lockSalt"`  // hex
 	LockAfter       int         `json:"lockAfter"` // minutes in the background; 0 = only on start

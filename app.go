@@ -111,6 +111,9 @@ type app struct {
 	upd            *updater
 	locked         bool // a required update must be installed first
 	appLocked      bool // the app lock screen is showing (applock.go)
+	helloAvailable bool // Windows Hello can be used (hello.go)
+	helloBusy      bool
+	helloTried     bool // Windows Hello was offered for this lock already
 	awaySince      time.Time
 	spare          *spareWindow
 	sparePending   bool
@@ -665,6 +668,7 @@ func (a *app) onShellMessage(raw string) {
 		a.pushState()
 		if fg, _, _ := pGetForegroundWindow.Call(); a.appLocked && fg == a.hwnd {
 			a.focusActive() // the lock screen takes the keyboard right away
+			a.autoHello()
 		}
 		for _, s := range a.svcs {
 			a.pushUnread(s)
@@ -760,6 +764,8 @@ func (a *app) pushState() {
 		"locked":          a.appLocked,
 		"lockAfter":       a.cfg.LockAfter,
 		"lockType":        a.cfg.LockType,
+		"lockBiometric":   a.cfg.LockBiometric,
+		"biometric":       map[string]any{"available": a.helloAvailable, "name": "Windows Hello"},
 		"platform":        "windows",
 		"version":         appVersion,
 		"maximized":       isZoomed(a.hwnd),
@@ -882,6 +888,8 @@ func (a *app) setOption(key string, raw json.RawMessage) {
 		for _, s := range []*service{a.svc("wa"), a.svc("tg")} {
 			a.pushPrivacy(s)
 		}
+	case "lockBiometric":
+		a.cfg.LockBiometric = b
 	case "lockAfter":
 		n, err := strconv.Atoi(s)
 		if err != nil {

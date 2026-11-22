@@ -505,6 +505,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   <symbol id="i-gclose" viewBox="0 0 10 10"><path d="M2 2l6 6M8 2 2 8"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8m-3 3 2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-finger" viewBox="0 0 24 24"><path d="M7.5 5.2A8 8 0 0 1 20 11.5c0 1.2-.1 2.4-.3 3.5"/><path d="M4.4 8.5A8 8 0 0 0 4 11.5c0 2.6.5 4.6 1.4 6.3"/><path d="M8.3 19.8C7.4 17.6 7 15 7 12a5 5 0 0 1 10 0c0 2.6-.4 5-1.2 7.2"/><path d="M12 12c0 3.2-.6 6.2-1.8 8.6"/><path d="M13.8 21c.6-1.5 1-3.2 1.1-5"/></symbol>
   <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 3h5"/></symbol>
   <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4v-14Z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><circle cx="5.5" cy="7" r="1.5"/><circle cx="5.5" cy="12" r="1.5"/><circle cx="5.5" cy="17" r="1.5"/><path d="M10 7h9.5M10 12h9.5M10 17h6"/></symbol>
@@ -658,6 +659,11 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
             <div class="card-text"><div class="card-title" id="lockKindTitle">PIN</div></div>
             <button class="btn" id="lockChange">Change</button>
           </div>
+          <div class="card" data-lock-row data-bio-row hidden>
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-finger"/></svg></span>
+            <div class="card-text"><div class="card-title" id="bioTitle">Unlock with Windows Hello</div></div>
+            <button class="toggle" role="switch" data-setting="lockBiometric"><span class="state"></span><span class="track"></span></button>
+          </div>
           <div class="card" data-lock-row hidden>
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-timer"/></svg></span>
             <div class="card-text"><div class="card-title">Lock after</div></div>
@@ -751,6 +757,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
         <button class="btn primary" id="unlockBtn">Unlock</button>
       </form>
       <p class="lock-msg" id="unlockMsg"></p>
+      <button class="btn" id="bioBtn" hidden><svg class="i" aria-hidden="true" style="display:inline-block;vertical-align:-3px;margin-right:6px"><use href="#i-finger"/></svg><span id="bioBtnText">Use Windows Hello</span></button>
       <button class="link" id="forgotBtn">Forgot your PIN?</button>
     </div>
     <div class="lock-box" id="resetBox" hidden>
@@ -799,6 +806,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     autoUpdate: true,
     // App lock: the host keeps the PIN (hashed) and decides when to lock.
     lockEnabled: false, locked: false, lockAfter: 5, lockType: 'pin',
+    // Windows Hello / Touch ID: { available, name } from the host; lockBiometric is the setting.
+    biometric: { available: false, name: '' }, lockBiometric: false,
     blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
     // Linux: GNOME's button layout (org.gnome.desktop.wm.preferences button-layout).
     decorationLayout: 'appmenu:close',
@@ -992,6 +1001,12 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     tg.querySelector('.state').textContent = on ? 'On' : 'Off';
     document.querySelectorAll('[data-lock-row]').forEach(function (r) { r.hidden = !on; });
     document.getElementById('lockKindTitle').textContent = cap(k.name);
+    var bio = s.biometric || {};
+    document.querySelectorAll('[data-bio-row]').forEach(function (r) { r.hidden = !on || !bio.available; });
+    document.getElementById('bioTitle').textContent = 'Unlock with ' + (bio.name || 'biometrics');
+    var bioBtn = document.getElementById('bioBtn');
+    bioBtn.hidden = !(bio.available && s.lockBiometric);
+    document.getElementById('bioBtnText').textContent = 'Use ' + (bio.name || 'biometrics');
     var lb = document.getElementById('lockBtn');
     lb.hidden = !on;
     lb.title = 'Lock (' + (s.platform === 'mac' ? '\u2318L' : 'Ctrl+L') + ')';
@@ -1032,6 +1047,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     focusUnlock();
   });
   document.getElementById('resetGo').addEventListener('click', function () { send('lock', { op: 'reset' }); });
+  document.getElementById('bioBtn').addEventListener('click', function () { send('lock', { op: 'bio' }); });
   document.getElementById('lockBtn').addEventListener('click', function () { send('lock', { op: 'now' }); });
 
   // Lock dialog: mode "set" (turn on), "change", "disable" (turn off).
@@ -1229,6 +1245,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     if (h.indexOf('update') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example release note\n- Small fixes' };
     if (h.indexOf('lock') >= 0) { s.lockEnabled = true; }
     if (h.indexOf('locked') >= 0) { s.locked = true; }
+    if (h.indexOf('bio') >= 0) { s.biometric = { available: true, name: s.platform === 'mac' ? 'Touch ID' : 'Windows Hello' }; s.lockBiometric = true; }
     if (h.indexOf('required') >= 0) s.update = { status: 'ready', version: '1.2.1', notes: '- Example', required: true };
     s.autostart = true;
     var fill = document.createElement('div');

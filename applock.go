@@ -92,6 +92,8 @@ func (a *app) startLock() {
 	if a.cfg.LockEnabled && a.cfg.LockHash != "" {
 		a.appLocked = true
 	}
+	a.helloTried = false
+	a.checkHello()
 	pSetTimer.Call(a.hwnd, lockTimer, uintptr(lockCheckEvery.Milliseconds()), 0)
 }
 
@@ -101,6 +103,7 @@ func (a *app) lockNow() {
 	}
 	debugLog("lock: locked")
 	a.appLocked = true
+	a.helloTried = false
 	a.layout()
 	a.pushState()
 	a.applyStrip()
@@ -130,6 +133,7 @@ func (a *app) onActivate(active bool) {
 	}
 	a.checkAway()
 	a.awaySince = time.Time{}
+	a.autoHello()
 }
 
 // checkAway locks when Twincxt has been in the background long enough. It
@@ -293,6 +297,8 @@ func (a *app) onLockMessage(data json.RawMessage) {
 		a.unlockApp()
 	case "now":
 		a.lockNow()
+	case "bio":
+		a.startHello()
 	case "reset":
 		if !a.appLocked {
 			return
@@ -316,6 +322,7 @@ func (a *app) setPin(pin string) {
 func (a *app) clearLock() {
 	a.cfg.LockEnabled = false
 	a.cfg.LockType = "pin"
+	a.cfg.LockBiometric = false
 	a.cfg.LockHash = ""
 	a.cfg.LockSalt = ""
 	a.cfg.LockFails = 0
