@@ -72,6 +72,9 @@ func main() {
 	a.upd.start()
 	r, _, _ := pRegisterWindowMessage.Call(utf16ptr("TaskbarCreated"))
 	a.taskbarCreated = uint32(r)
+	r, _, _ = pRegisterWindowMessage.Call(utf16ptr("TaskbarButtonCreated"))
+	taskbarButtonCreated = uint32(r)
+	a.badgeShown = -1
 	a.addTray()
 
 	startHidden := strings.Contains(arg, "--autostart") && a.cfg.StartHidden

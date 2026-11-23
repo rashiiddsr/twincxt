@@ -109,9 +109,11 @@ type app struct {
 	quitting       bool
 	popups         map[uintptr]*popup
 	upd            *updater
-	locked         bool // a required update must be installed first
-	appLocked      bool // the app lock screen is showing (applock.go)
-	helloAvailable bool // Windows Hello can be used (hello.go)
+	locked         bool    // a required update must be installed first
+	appLocked      bool    // the app lock screen is showing (applock.go)
+	helloAvailable bool    // Windows Hello can be used (hello.go)
+	taskbar        uintptr // ITaskbarList3, for the unread badge (badge.go)
+	badgeShown     int
 	helloBusy      bool
 	helloTried     bool // Windows Hello was offered for this lock already
 	awaySince      time.Time
@@ -478,6 +480,10 @@ func mainWndProc(hwnd uintptr, m uint32, wp, lp uintptr) uintptr {
 		if a != nil && a.taskbarCreated != 0 && m == a.taskbarCreated {
 			a.addTray() // Explorer restarted
 		}
+		if a != nil && taskbarButtonCreated != 0 && m == taskbarButtonCreated {
+			a.badgeShown = -1 // the taskbar button is (re)created: draw the badge again
+			a.updateBadge()
+		}
 	}
 	r, _, _ := pDefWindowProc.Call(hwnd, uintptr(m), wp, lp)
 	return r
@@ -753,7 +759,6 @@ func (a *app) pushState() {
 		"notifyWa":        a.cfg.NotifyWA,
 		"notifyTg":        a.cfg.NotifyTG,
 		"telegramVersion": a.cfg.TelegramVersion,
-		"notifyMode":      a.cfg.NotifyMode,
 		"autoUpdate":      a.cfg.AutoUpdate,
 		"blurMessages":    a.cfg.BlurMessages,
 		"blurPreviews":    a.cfg.BlurPreviews,
@@ -765,6 +770,7 @@ func (a *app) pushState() {
 		"lockAfter":       a.cfg.LockAfter,
 		"lockType":        a.cfg.LockType,
 		"lockBiometric":   a.cfg.LockBiometric,
+		"badge":           a.cfg.Badge,
 		"biometric":       map[string]any{"available": a.helloAvailable, "name": "Windows Hello"},
 		"platform":        "windows",
 		"version":         appVersion,
@@ -795,6 +801,7 @@ func (a *app) pushUnread(s *service) {
 	if a.shellOK {
 		a.shell.Eval(fmt.Sprintf("twincxt.unread(%q,%d)", s.id, s.unread))
 	}
+	a.updateBadge()
 }
 
 // applyStrip colours the title strip like the top of the active page so the
@@ -890,6 +897,10 @@ func (a *app) setOption(key string, raw json.RawMessage) {
 		}
 	case "lockBiometric":
 		a.cfg.LockBiometric = b
+	case "badge":
+		a.cfg.Badge = b
+		a.badgeShown = -1
+		a.updateBadge()
 	case "lockAfter":
 		n, err := strconv.Atoi(s)
 		if err != nil {
@@ -1188,15 +1199,7 @@ func (a *app) notify(s *service, title, body string) {
 		Icon:   serviceIconPath(s.id),
 		Silent: true, // the pages play their own notification sound
 	}
-	if a.cfg.NotifyMode != "attention" {
-		t.show()
-	}
-	// "Flash taskbar": the taskbar button flashes until Twincxt is opened.
-	if a.cfg.NotifyMode != "toast" && !focused {
-		fw := flashWInfo{Hwnd: a.hwnd, Flags: FLASHW_TRAY | FLASHW_TIMERNOFG}
-		fw.Size = uint32(unsafe.Sizeof(fw))
-		pFlashWindowEx.Call(uintptr(unsafe.Pointer(&fw)))
-	}
+	t.show()
 }
 
 // handleShortcut implements app shortcuts while any WebView has focus.

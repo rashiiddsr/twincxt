@@ -426,7 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       "closeAction": cfg.closeAction,
       "notifyWa": cfg.notifyWa,
       "notifyTg": cfg.notifyTg,
-      "notifyMode": cfg.notifyMode,
+      "badge": cfg.badge,
       "telegramVersion": cfg.telegramVersion,
       "autoUpdate": cfg.autoUpdate,
       "maximized": window?.isZoomed ?? false,
@@ -445,7 +445,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   func pushUnread(_ s: Service) {
     shellEval("twincxt.unread(\(json(s.id)),\(s.unread))")
     let total = services.values.reduce(0) { $0 + $1.unread }
-    NSApp.dockTile.badgeLabel = total > 0 ? String(total) : nil
+    NSApp.dockTile.badgeLabel = cfg.badge && total > 0 ? String(total) : nil
   }
 
   func applyStrip() {
@@ -575,8 +575,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     case "closeAction": cfg.closeAction = s == "quit" ? "quit" : "tray"
     case "notifyWa": cfg.notifyWa = b
     case "notifyTg": cfg.notifyTg = b
-    case "notifyMode":
-      if ["toast", "attention", "both"].contains(s) { cfg.notifyMode = s }
+    case "badge":
+      cfg.badge = b
+      if let s = services["wa"] { pushUnread(s) }
     case "autoUpdate":
       cfg.autoUpdate = b
       if b { updater.check(false) }
@@ -1019,12 +1020,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       title = NAMES[s.id] ?? "Twincxt"
       body = "New message"
     }
-    if cfg.notifyMode != "attention" {
-      post(title: title, body: body, info: ["svc": s.id])
-    }
-    if cfg.notifyMode != "toast" && !focused {
-      NSApp.requestUserAttention(.informationalRequest) // bounces the Dock icon once
-    }
+    post(title: title, body: body, info: ["svc": s.id])
   }
 
   func notifyPlain(_ title: String, _ body: String) {

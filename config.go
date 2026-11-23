@@ -34,6 +34,7 @@ type config struct {
 	BlurNames       bool        `json:"blurNames"`
 	BlurPhotos      bool        `json:"blurPhotos"`
 	BlurMedia       bool        `json:"blurMedia"`
+	Badge           bool        `json:"badge"` // unread count on the taskbar button
 	LockEnabled     bool        `json:"lockEnabled"`
 	LockType        string      `json:"lockType"` // pin | password
 	LockBiometric   bool        `json:"lockBiometric"`
@@ -58,6 +59,7 @@ func defaultConfig() config {
 		NotifyMode:      "toast",
 		AutoUpdate:      true,
 		LockAfter:       5,
+		Badge:           true,
 	}
 }
 

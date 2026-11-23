@@ -43,7 +43,7 @@ final class Config {
   var closeAction = "tray"
   var notifyWa = true
   var notifyTg = true
-  var notifyMode = "toast"
+  var badge = true // unread count on the Dock icon
   var telegramVersion = "a"
   var autoUpdate = true
   var skippedVersion = ""
@@ -99,7 +99,7 @@ final class Config {
     closeAction = str("closeAction", ["tray", "quit"], "tray")
     notifyWa = bool("notifyWa", true)
     notifyTg = bool("notifyTg", true)
-    notifyMode = str("notifyMode", ["toast", "attention", "both"], "toast")
+    badge = bool("badge", true)
     telegramVersion = str("telegramVersion", ["a", "k"], "a")
     autoUpdate = bool("autoUpdate", true)
     skippedVersion = d["skippedVersion"] as? String ?? ""
@@ -135,7 +135,7 @@ final class Config {
     d["closeAction"] = closeAction
     d["notifyWa"] = notifyWa
     d["notifyTg"] = notifyTg
-    d["notifyMode"] = notifyMode
+    d["badge"] = badge
     d["telegramVersion"] = telegramVersion
     d["autoUpdate"] = autoUpdate
     d["skippedVersion"] = skippedVersion

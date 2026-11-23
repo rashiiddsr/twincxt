@@ -628,12 +628,8 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
         <div class="cards">
           <div class="card">
             <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-bell"/></svg></span>
-            <div class="card-text"><div class="card-title">Alert style</div></div>
-            <div class="combo" data-choice="notifyMode">
-              <button data-value="toast">Banner</button>
-              <button data-value="attention" data-text="attention">Flash</button>
-              <button data-value="both">Both</button>
-            </div>
+            <div class="card-text"><div class="card-title" data-text="badge">Badge on taskbar icon</div></div>
+            <button class="toggle" role="switch" data-setting="badge"><span class="state"></span><span class="track"></span></button>
           </div>
           <div class="card">
             <svg class="svc-ico" style="color:var(--wa)" aria-hidden="true"><use href="#ico-wa"/></svg>
@@ -802,7 +798,7 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
     active: 'wa', settingsOpen: false, maximized: false,
     theme: 'system', zoom: { wa: 100, tg: 100 }, unread: { wa: 0, tg: 0 },
     autostart: false, startHidden: false, closeAction: 'tray',
-    notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
+    notifyWa: true, notifyTg: true, badge: true, telegramVersion: 'a',
     autoUpdate: true,
     // App lock: the host keeps the PIN (hashed) and decides when to lock.
     lockEnabled: false, locked: false, lockAfter: 5, lockType: 'pin',
@@ -818,11 +814,11 @@ svg.i { width: 16px; height: 16px; display: block; fill: none; stroke: currentCo
   // Words that differ per system.
   var TEXT = {
     windows: { autostart: 'Start with Windows', startHidden: 'Start minimized', keepRunning: 'Keep in tray',
-      attention: 'Flash taskbar', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' },
+      badge: 'Badge on taskbar icon', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' },
     mac: { autostart: 'Open at login', startHidden: 'Start hidden', keepRunning: 'Keep running',
-      attention: 'Bounce Dock', one: '⌘1', two: '⌘2', settings: '⌘,' },
+      badge: 'Badge on Dock icon', one: '⌘1', two: '⌘2', settings: '⌘,' },
     linux: { autostart: 'Open at login', startHidden: 'Start minimized', keepRunning: 'Keep in tray',
-      attention: 'Highlight', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' }
+      badge: 'Badge on app icon', one: 'Alt+1', two: 'Alt+2', settings: 'Ctrl+,' }
   };
 
   // WebView2 (Windows) or the Electron preload (macOS, Linux).

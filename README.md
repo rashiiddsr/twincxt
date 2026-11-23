@@ -18,7 +18,7 @@ All three share the same interface (`ui/shell.html`) and page script
 - Both stay signed in and running; unread counts on each half, in the tray / Dock.
 - Calls stay in the main window; a separate call window opens only from WhatsApp's
   "Move to new window", and closing it hands the call (and camera) back.
-- Notifications: system notification, a flashing taskbar button / bouncing Dock
+- Notifications: system notifications, and an unread badge on the taskbar / Dock
   icon, or both.
 - Shortcuts: `Ctrl+Tab` switches; `Alt+1` / `Alt+2` (macOS `⌘1` / `⌘2`); settings
   `Ctrl+,` (macOS `⌘,`).

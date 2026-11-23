@@ -41,7 +41,7 @@ const CONFIG = path.join(app.getPath('userData'), 'config.json');
 const DEFAULTS = {
   active: 'wa', theme: 'system', zoomWa: 100, zoomTg: 100,
   autostart: false, startHidden: false, closeAction: 'tray',
-  notifyWa: true, notifyTg: true, notifyMode: 'toast', telegramVersion: 'a',
+  notifyWa: true, notifyTg: true, badge: true, telegramVersion: 'a',
   autoUpdate: true, skippedVersion: '',
   blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
   lockEnabled: false, lockType: 'pin', lockHash: '', lockSalt: '', lockAfter: 5, lockFails: 0, lockUntil: 0,
@@ -56,7 +56,7 @@ function loadConfig() {
   if (!['wa', 'tg'].includes(c.active)) c.active = 'wa';
   if (!['light', 'dark', 'system'].includes(c.theme)) c.theme = 'system';
   if (!['tray', 'quit'].includes(c.closeAction)) c.closeAction = 'tray';
-  if (!['toast', 'attention', 'both'].includes(c.notifyMode)) c.notifyMode = 'toast';
+  c.badge = c.badge !== false;
   if (!['a', 'k'].includes(c.telegramVersion)) c.telegramVersion = 'a';
   for (const k of ['zoomWa', 'zoomTg']) if (!(c[k] >= 50 && c[k] <= 200)) c[k] = 100;
   if (![0, 1, 5, 15].includes(c.lockAfter)) c.lockAfter = 5;
@@ -158,7 +158,7 @@ function pushState() {
     closeAction: cfg.closeAction,
     notifyWa: cfg.notifyWa,
     notifyTg: cfg.notifyTg,
-    notifyMode: cfg.notifyMode,
+    badge: cfg.badge,
     telegramVersion: cfg.telegramVersion,
     autoUpdate: cfg.autoUpdate,
     blurMessages: cfg.blurMessages,
@@ -200,8 +200,9 @@ function pushPrivacy(s) {
 function pushUnread(s) {
   shellEval(`twincxt.unread(${JSON.stringify(s.id)},${s.unread})`);
   const total = svcs.wa.unread + svcs.tg.unread;
-  if (IS_MAC) app.dock.setBadge(total ? String(total) : '');
-  else app.setBadgeCount(total);
+  const shown = cfg.badge ? total : 0;
+  if (IS_MAC) app.dock.setBadge(shown ? String(shown) : '');
+  else app.setBadgeCount(shown);
   if (tray) tray.setToolTip(total ? `Twincxt · ${total} unread` : 'Twincxt');
 }
 
@@ -635,7 +636,7 @@ function setOption(key, value) {
     case 'closeAction': cfg.closeAction = value === 'quit' ? 'quit' : 'tray'; break;
     case 'notifyWa': cfg.notifyWa = !!value; break;
     case 'notifyTg': cfg.notifyTg = !!value; break;
-    case 'notifyMode': if (['toast', 'attention', 'both'].includes(value)) cfg.notifyMode = value; break;
+    case 'badge': cfg.badge = !!value; pushUnread(svcs.wa); break;
     case 'autoUpdate': cfg.autoUpdate = !!value; if (cfg.autoUpdate) updater.check(false); break;
     case 'blurMessages': case 'blurPreviews': case 'blurNames': case 'blurPhotos': case 'blurMedia':
       cfg[key] = !!value;
@@ -844,15 +845,10 @@ function notifyMessage(s, title, body) {
   const focused = win && win.isVisible() && win.isFocused() && !win.isMinimized();
   if (focused && s.id === cfg.active && !settingsOpen) return; // already looking at it
   if (appLocked) { title = NAMES[s.id]; body = 'New message'; } // say that, not what
-  if (cfg.notifyMode !== 'attention' && Notification.isSupported()) {
+  if (Notification.isSupported()) {
     const n = new Notification({ title: title || NAMES[s.id], body, icon: iconFor(s.id), silent: true });
     n.on('click', () => { selectService(s.id, 'notification'); showWindow(); });
     n.show();
-  }
-  // "Kedip taskbar" / "Pantulkan Dock" / "Sorot di taskbar".
-  if (cfg.notifyMode !== 'toast' && !focused) {
-    if (IS_MAC) app.dock.bounce('informational');
-    else if (win) win.flashFrame(true);
   }
 }
 
