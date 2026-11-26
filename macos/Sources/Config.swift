@@ -44,6 +44,8 @@ final class Config {
   var notifyWa = true
   var notifyTg = true
   var badge = true // unread count on the Dock icon
+  var downloadDir = "" // "" = the Downloads folder
+  var downloadAsk = false // Save panel for every download
   var telegramVersion = "a"
   var autoUpdate = true
   var skippedVersion = ""
@@ -100,6 +102,8 @@ final class Config {
     notifyWa = bool("notifyWa", true)
     notifyTg = bool("notifyTg", true)
     badge = bool("badge", true)
+    downloadDir = d["downloadDir"] as? String ?? ""
+    downloadAsk = bool("downloadAsk", false)
     telegramVersion = str("telegramVersion", ["a", "k"], "a")
     autoUpdate = bool("autoUpdate", true)
     skippedVersion = d["skippedVersion"] as? String ?? ""
@@ -136,6 +140,8 @@ final class Config {
     d["notifyWa"] = notifyWa
     d["notifyTg"] = notifyTg
     d["badge"] = badge
+    d["downloadDir"] = downloadDir
+    d["downloadAsk"] = downloadAsk
     d["telegramVersion"] = telegramVersion
     d["autoUpdate"] = autoUpdate
     d["skippedVersion"] = skippedVersion

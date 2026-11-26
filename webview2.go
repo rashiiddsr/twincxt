@@ -387,12 +387,33 @@ func (w *webView) OnNewWindow(fn func(req *newWindowRequest)) {
 	})
 }
 
-// OnDownload hides the Edge download flyout. fn receives the target path.
-func (w *webView) OnDownload(fn func(path string)) {
+// OnDownload hides the Edge download flyout. fn receives WebView2's proposed
+// path and must call finish (now or later) with the path to use, or cancel.
+func (w *webView) OnDownload(fn func(path string, finish func(newPath string, cancel bool))) {
 	w.on(75, func(_, args uintptr) { // ICoreWebView2_4::add_DownloadStarting
 		path := comGetString(args, 6) // get_ResultFilePath
 		comCall(args, 9, 1)           // put_Handled: no default download UI
-		fn(path)
+		var def uintptr
+		comCall(args, 10, uintptr(unsafe.Pointer(&def))) // GetDeferral
+		comAddRef(args)
+		done := false
+		fn(path, func(newPath string, cancel bool) {
+			if done {
+				return
+			}
+			done = true
+			if cancel {
+				comCall(args, 5, 1) // put_Cancel
+			} else if newPath != "" && newPath != path {
+				p := utf16ptr(newPath)
+				comCall(args, 7, uintptr(unsafe.Pointer(p))) // put_ResultFilePath
+			}
+			if def != 0 {
+				comCall(def, 3) // ICoreWebView2Deferral::Complete
+				comRelease(def)
+			}
+			comRelease(args)
+		})
 	})
 }
 

@@ -115,6 +115,8 @@ type app struct {
 	taskbar        uintptr // ITaskbarList3, for the unread badge (badge.go)
 	badgeShown     int
 	helloBusy      bool
+	helloInfo      uintptr // IAsyncInfo of the open Windows Hello request
+	helloGen       int
 	helloTried     bool // Windows Hello was offered for this lock already
 	awaySince      time.Time
 	spare          *spareWindow
@@ -706,6 +708,8 @@ func (a *app) onShellMessage(raw string) {
 		a.setOption(kv.Key, kv.Value)
 	case "lock":
 		a.onLockMessage(m.Data)
+	case "download":
+		a.onDownloadMessage(str())
 	case "action":
 		a.runAction(str())
 	case "window":
@@ -771,6 +775,9 @@ func (a *app) pushState() {
 		"lockType":        a.cfg.LockType,
 		"lockBiometric":   a.cfg.LockBiometric,
 		"badge":           a.cfg.Badge,
+		"downloadDir":     a.downloadDir(),
+		"downloadCustom":  a.cfg.DownloadDir != "",
+		"downloadAsk":     a.cfg.DownloadAsk,
 		"biometric":       map[string]any{"available": a.helloAvailable, "name": "Windows Hello"},
 		"platform":        "windows",
 		"version":         appVersion,
@@ -897,6 +904,8 @@ func (a *app) setOption(key string, raw json.RawMessage) {
 		}
 	case "lockBiometric":
 		a.cfg.LockBiometric = b
+	case "downloadAsk":
+		a.cfg.DownloadAsk = b
 	case "badge":
 		a.cfg.Badge = b
 		a.badgeShown = -1
@@ -998,6 +1007,10 @@ func (a *app) setupService(s *service, wv *webView) {
 	})
 	wv.OnNavigationCompleted(func() {
 		a.pushPrivacy(s)
+		// Test hook (TWINCXT_TEST_DOWNLOAD=1): the page downloads a small file.
+		if s.id == "wa" && os.Getenv("TWINCXT_TEST_DOWNLOAD") != "" {
+			wv.Eval(`setTimeout(function(){var l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['hello from twincxt'],{type:'text/plain'}));l.download='twincxt-test.txt';document.documentElement.appendChild(l);l.click();},2000)`)
+		}
 		// Test hook (TWINCXT_TEST_POPUP=1): one popup opened by the page on
 		// its own (must be blocked) and one opened from a real click on a test
 		// button (must open, with content written right after window.open).
@@ -1100,13 +1113,7 @@ func (a *app) configureWebView(wv *webView, svcID string) {
 		}
 		req.Handled()
 	})
-	wv.OnDownload(func(path string) {
-		name := "Twincxt"
-		if s := a.svc(svcID); s != nil {
-			name = s.name
-		}
-		watchDownload(path, name, serviceIconPath(svcID))
-	})
+	wv.OnDownload(func(path string, finish func(string, bool)) { a.startDownload(svcID, path, finish) })
 	wv.OnAcceleratorKey(a.handleShortcut)
 }
 

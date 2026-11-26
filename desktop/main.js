@@ -7,7 +7,7 @@
 
 const {
   app, BaseWindow, WebContentsView, BrowserWindow, ipcMain, Menu, Tray, Notification,
-  nativeTheme, nativeImage, shell, session, systemPreferences, screen, clipboard,
+  nativeTheme, nativeImage, shell, session, systemPreferences, screen, clipboard, dialog,
 } = require('electron');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -42,6 +42,7 @@ const DEFAULTS = {
   active: 'wa', theme: 'system', zoomWa: 100, zoomTg: 100,
   autostart: false, startHidden: false, closeAction: 'tray',
   notifyWa: true, notifyTg: true, badge: true, telegramVersion: 'a',
+  downloadDir: '', downloadAsk: false,
   autoUpdate: true, skippedVersion: '',
   blurMessages: false, blurPreviews: false, blurNames: false, blurPhotos: false, blurMedia: false,
   lockEnabled: false, lockType: 'pin', lockHash: '', lockSalt: '', lockAfter: 5, lockFails: 0, lockUntil: 0,
@@ -159,6 +160,9 @@ function pushState() {
     notifyWa: cfg.notifyWa,
     notifyTg: cfg.notifyTg,
     badge: cfg.badge,
+    downloadDir: downloadDir(),
+    downloadCustom: !!cfg.downloadDir,
+    downloadAsk: cfg.downloadAsk,
     telegramVersion: cfg.telegramVersion,
     autoUpdate: cfg.autoUpdate,
     blurMessages: cfg.blurMessages,
@@ -579,6 +583,10 @@ ipcMain.on('shell-msg', (_e, raw) => {
     case 'set': setOption(m.data.key, m.data.value); break;
     case 'action': runAction(String(m.data)); break;
     case 'lock': onLockMessage(m.data || {}); break;
+    case 'download':
+      if (m.data === 'choose') chooseDownloadDir();
+      else { cfg.downloadDir = ''; saveConfig(); pushState(); }
+      break;
     case 'update':
       if (m.data === 'check') updater.check(true);
       else if (m.data === 'install') updater.install();
@@ -637,6 +645,7 @@ function setOption(key, value) {
     case 'notifyWa': cfg.notifyWa = !!value; break;
     case 'notifyTg': cfg.notifyTg = !!value; break;
     case 'badge': cfg.badge = !!value; pushUnread(svcs.wa); break;
+    case 'downloadAsk': cfg.downloadAsk = !!value; break;
     case 'autoUpdate': cfg.autoUpdate = !!value; if (cfg.autoUpdate) updater.check(false); break;
     case 'blurMessages': case 'blurPreviews': case 'blurNames': case 'blurPhotos': case 'blurMedia':
       cfg[key] = !!value;
@@ -990,6 +999,23 @@ function buildTray() {
 
 // ---- downloads and permissions -----------------------------------------------------------------------
 
+// Where downloads go: the chosen folder if it still exists, else Downloads.
+function downloadDir() {
+  try { if (cfg.downloadDir && fs.statSync(cfg.downloadDir).isDirectory()) return cfg.downloadDir; } catch (_) { /* gone */ }
+  return app.getPath('downloads');
+}
+
+async function chooseDownloadDir() {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Save downloads to', defaultPath: downloadDir(), buttonLabel: 'Choose',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (r.canceled || !r.filePaths[0]) return;
+  cfg.downloadDir = path.resolve(r.filePaths[0]) === path.resolve(app.getPath('downloads')) ? '' : r.filePaths[0];
+  saveConfig();
+  pushState();
+}
+
 function setupSession() {
   const ses = session.fromPartition(PARTITION);
   ses.setUserAgent(USER_AGENT);
@@ -1008,14 +1034,20 @@ function setupSession() {
   ses.on('will-download', (_e, item, wc) => {
     const v = wc && views.get(wc.id);
     const svcId = v ? v.svc : '';
-    const dir = app.getPath('downloads');
+    const dir = downloadDir();
     const ext = path.extname(item.getFilename());
     const base = path.basename(item.getFilename(), ext) || 'download';
     let target = path.join(dir, base + ext);
-    for (let i = 1; fs.existsSync(target); i++) target = path.join(dir, `${base} (${i})${ext}`);
-    item.setSavePath(target);
+    if (cfg.downloadAsk) {
+      // No save path: Electron shows the Save dialog, starting here.
+      item.setSaveDialogOptions({ title: 'Save ' + item.getFilename(), defaultPath: target });
+    } else {
+      for (let i = 1; fs.existsSync(target); i++) target = path.join(dir, `${base} (${i})${ext}`);
+      item.setSavePath(target);
+    }
     item.once('done', (_ev, state) => {
       if (state !== 'completed' || !Notification.isSupported()) return;
+      target = item.getSavePath() || target;
       const n = new Notification({
         title: NAMES[svcId] || 'Twincxt',
         body: 'Download complete: ' + path.basename(target),

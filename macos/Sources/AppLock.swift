@@ -161,19 +161,27 @@ extension AppDelegate {
     dlog("bio: available=\(bioAvailable)")
   }
 
+  // A request still open is cancelled first, so the button always brings up a
+  // fresh Touch ID prompt.
   func startBio() {
-    if !appLocked || !cfg.lockBiometric || !bioAvailable || bioBusy { return }
+    if !appLocked || !cfg.lockBiometric || !bioAvailable { return }
+    if bioBusy { bioContext?.invalidate() }
+    bioGen += 1
+    let gen = bioGen
     bioBusy = true
     let ctx = LAContext()
+    bioContext = ctx
     ctx.localizedFallbackTitle = "" // no "Enter Password": the Twincxt PIN/password is right there
     ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "unlock Twincxt") { ok, err in
       let code = (err as NSError?)?.code ?? 0
-      DispatchQueue.main.async { (NSApp.delegate as? AppDelegate)?.bioDone(ok, code) }
+      DispatchQueue.main.async { (NSApp.delegate as? AppDelegate)?.bioDone(ok, code, gen) }
     }
   }
 
-  func bioDone(_ ok: Bool, _ code: Int) {
+  func bioDone(_ ok: Bool, _ code: Int, _ gen: Int) {
+    if gen != bioGen { return } // an older request, replaced by a newer one
     bioBusy = false
+    bioContext = nil
     dlog("bio: ok=\(ok) code=\(code)")
     if ok {
       if appLocked {
@@ -197,7 +205,11 @@ extension AppDelegate {
     if bioTried || !appLocked || !cfg.lockBiometric || !bioAvailable || !shellReady { return }
     if !NSApp.isActive || window?.isKeyWindow != true { return }
     bioTried = true
-    startBio()
+    // Wait a moment so the window is fully active; the prompt can fail to show otherwise.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+      guard let d = NSApp.delegate as? AppDelegate else { return }
+      if NSApp.isActive && d.appLocked { d.startBio() } else { d.bioTried = false }
+    }
   }
 
   // Locks when Twincxt has been in the background long enough. It runs on a

@@ -34,7 +34,9 @@ type config struct {
 	BlurNames       bool        `json:"blurNames"`
 	BlurPhotos      bool        `json:"blurPhotos"`
 	BlurMedia       bool        `json:"blurMedia"`
-	Badge           bool        `json:"badge"` // unread count on the taskbar button
+	Badge           bool        `json:"badge"`       // unread count on the taskbar button
+	DownloadDir     string      `json:"downloadDir"` // "" = the Downloads folder
+	DownloadAsk     bool        `json:"downloadAsk"` // Save As for every download
 	LockEnabled     bool        `json:"lockEnabled"`
 	LockType        string      `json:"lockType"` // pin | password
 	LockBiometric   bool        `json:"lockBiometric"`

@@ -48,13 +48,14 @@ func consentFactory(iid *windows.GUID) uintptr {
 }
 
 // waitAsync polls a WinRT async operation on the UI thread and calls done
-// with its result (an enum) once it has completed; -1 when it failed.
-func (a *app) waitAsync(op uintptr, done func(int32)) {
+// with its result (an enum) once it has completed; -1 when it failed or was
+// cancelled. It returns the operation's IAsyncInfo, valid until done runs.
+func (a *app) waitAsync(op uintptr, done func(int32)) uintptr {
 	var info uintptr
 	if comCall(op, 0, uintptr(unsafe.Pointer(&iidAsyncInfo)), uintptr(unsafe.Pointer(&info))) != 0 {
 		comRelease(op)
 		done(-1)
-		return
+		return 0
 	}
 	var poll func()
 	poll = func() {
@@ -74,6 +75,7 @@ func (a *app) waitAsync(op uintptr, done func(int32)) {
 		}
 	}
 	poll()
+	return info
 }
 
 // checkHello finds out once whether Windows Hello can be used.
@@ -89,7 +91,7 @@ func (a *app) checkHello() {
 	if r != 0 || op == 0 {
 		return
 	}
-	a.waitAsync(op, func(v int32) {
+	_ = a.waitAsync(op, func(v int32) {
 		a.helloAvailable = v == 0 // UserConsentVerifierAvailability.Available
 		debugLog("hello: availability " + itoa(int64(v)))
 		a.pushState()
@@ -97,12 +99,23 @@ func (a *app) checkHello() {
 	})
 }
 
+var pAllowSetForegroundWindow = user32.NewProc("AllowSetForegroundWindow")
+
 // startHello shows the Windows Hello dialog and unlocks Twincxt when it
-// succeeds.
+// succeeds. A request still open (e.g. its dialog ended up behind another
+// window) is cancelled first, so the button always brings up a fresh dialog.
 func (a *app) startHello() {
-	if !a.appLocked || !a.cfg.LockBiometric || !a.helloAvailable || a.helloBusy {
+	if !a.appLocked || !a.cfg.LockBiometric || !a.helloAvailable {
 		return
 	}
+	if a.helloBusy && a.helloInfo != 0 {
+		debugLog("hello: cancelling the open request")
+		comCall(a.helloInfo, 9) // IAsyncInfo::Cancel
+	}
+	a.helloGen++
+	gen := a.helloGen
+	// Let the Windows Hello dialog (another process) come to the front.
+	pAllowSetForegroundWindow.Call(^uintptr(0)) // ASFW_ANY
 	f := consentFactory(&iidConsentInterop)
 	if f == 0 {
 		return
@@ -117,8 +130,12 @@ func (a *app) startHello() {
 		return
 	}
 	a.helloBusy = true
-	a.waitAsync(op, func(v int32) {
+	a.helloInfo = a.waitAsync(op, func(v int32) {
+		if gen != a.helloGen {
+			return // an older request, replaced by a newer one
+		}
 		a.helloBusy = false
+		a.helloInfo = 0
 		debugLog("hello: result " + itoa(int64(v)))
 		switch v {
 		case 0: // Verified
@@ -137,7 +154,8 @@ func (a *app) startHello() {
 }
 
 // autoHello opens Windows Hello by itself once per lock, when the locked
-// window is in front.
+// window is in front. It waits a moment so the window is fully active first;
+// otherwise the dialog can open behind it.
 func (a *app) autoHello() {
 	if a.helloTried || !a.appLocked || !a.cfg.LockBiometric || !a.helloAvailable || !a.shellOK {
 		return
@@ -146,5 +164,13 @@ func (a *app) autoHello() {
 		return
 	}
 	a.helloTried = true
-	a.startHello()
+	time.AfterFunc(350*time.Millisecond, func() {
+		a.ui(func() {
+			if fg, _, _ := pGetForegroundWindow.Call(); fg == a.hwnd && a.appLocked {
+				a.startHello()
+			} else {
+				a.helloTried = false // try again the next time the window comes to the front
+			}
+		})
+	})
 }

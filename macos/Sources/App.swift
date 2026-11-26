@@ -6,6 +6,7 @@
 // the WhatsApp and Telegram views sit in the content area on top of it.
 
 import AppKit
+import LocalAuthentication
 import WebKit
 import UserNotifications
 import AVFoundation
@@ -91,6 +92,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
   var bioAvailable = false // Touch ID can be used
   var bioName = "Touch ID"
   var bioBusy = false
+  var bioContext: LAContext? // the open Touch ID request
+  var bioGen = 0
   var bioTried = false // Touch ID was offered for this lock already
   var awaySince: Date?
   var lockTimer: Timer?
@@ -427,6 +430,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       "notifyWa": cfg.notifyWa,
       "notifyTg": cfg.notifyTg,
       "badge": cfg.badge,
+      "downloadDir": downloadDir().path,
+      "downloadCustom": !cfg.downloadDir.isEmpty,
+      "downloadAsk": cfg.downloadAsk,
       "telegramVersion": cfg.telegramVersion,
       "autoUpdate": cfg.autoUpdate,
       "maximized": window?.isZoomed ?? false,
@@ -535,6 +541,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
       }
     case "lock":
       onLockMessage(data)
+    case "download":
+      if (data as? String) == "choose" { chooseDownloadDir() } else { cfg.downloadDir = ""; cfg.save(); pushState() }
     case "regions":
       if let d = data as? [String: Any] {
         func rects(_ a: Any?) -> [CGRect] {
@@ -575,6 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     case "closeAction": cfg.closeAction = s == "quit" ? "quit" : "tray"
     case "notifyWa": cfg.notifyWa = b
     case "notifyTg": cfg.notifyTg = b
+    case "downloadAsk": cfg.downloadAsk = b
     case "badge":
       cfg.badge = b
       if let s = services["wa"] { pushUnread(s) }
@@ -952,11 +961,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
   // ---- downloads ------------------------------------------------------------------------------
 
+  var systemDownloads: URL { FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0] }
+
+  // Where downloads go: the chosen folder if it still exists, else Downloads.
+  func downloadDir() -> URL {
+    var isDir: ObjCBool = false
+    if !cfg.downloadDir.isEmpty, FileManager.default.fileExists(atPath: cfg.downloadDir, isDirectory: &isDir), isDir.boolValue {
+      return URL(fileURLWithPath: cfg.downloadDir)
+    }
+    return systemDownloads
+  }
+
+  func chooseDownloadDir() {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.canCreateDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.directoryURL = downloadDir()
+    panel.message = "Save downloads to"
+    panel.prompt = "Choose"
+    let done: (NSApplication.ModalResponse) -> Void = { resp in
+      guard resp == .OK, let url = panel.url else { return }
+      self.cfg.downloadDir = url.standardizedFileURL.path == self.systemDownloads.standardizedFileURL.path ? "" : url.path
+      self.cfg.save()
+      self.pushState()
+    }
+    if let w = window { panel.beginSheetModal(for: w, completionHandler: done) } else { done(panel.runModal()) }
+  }
+
   func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                 completionHandler: @escaping (URL?) -> Void) {
-    let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+    let dir = downloadDir()
     var name = suggestedFilename.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
     if name.isEmpty { name = "download" }
+    if cfg.downloadAsk {
+      let panel = NSSavePanel()
+      panel.directoryURL = dir
+      panel.nameFieldStringValue = name
+      panel.canCreateDirectories = true
+      let key = ObjectIdentifier(download)
+      let done: (NSApplication.ModalResponse) -> Void = { resp in
+        guard resp == .OK, let url = panel.url else { completionHandler(nil); return }
+        // The panel already asked about replacing; WKDownload won't overwrite.
+        try? FileManager.default.removeItem(at: url)
+        self.downloads[key] = url
+        dlog("download: \(url.path)")
+        completionHandler(url)
+      }
+      if let w = window { panel.beginSheetModal(for: w, completionHandler: done) } else { done(panel.runModal()) }
+      return
+    }
     let ext = (name as NSString).pathExtension
     var base = (name as NSString).deletingPathExtension
     if base.isEmpty { base = "download" }
